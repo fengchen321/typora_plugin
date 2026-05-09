@@ -131,6 +131,8 @@
             var contents = [];
             for (var i = 0; i < lines.length; i++) {
                 var lineText = lines[i].textContent;
+                // 移除零宽度空格和其他不可见字符
+                lineText = lineText.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
                 console.log("[PlantUML Detector] Line", i, ":", lineText.substring(0, 50));
                 contents.push(lineText);
             }
@@ -142,6 +144,7 @@
         // 备选方案：直接文本内容
         var codeElement = element.querySelector("code") || element;
         var textContent = codeElement.textContent || "";
+        textContent = textContent.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
         console.log("[PlantUML Detector] Fallback text content length:", textContent.length);
         return textContent;
     };
