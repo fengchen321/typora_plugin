@@ -1,23 +1,36 @@
 // plugin/custom/plugins/plantuml/config.js
+// PlantUML 默认配置 - UMD 模块
 
-const defaultConfig = {
-    // Render server URL (default to public PlantUML server)
-    serverUrl: "http://www.plantuml.com/plantuml",
+(function(root) {
+    'use strict';
 
-    // Render mode: "auto" (real-time) or "manual" (trigger on demand)
-    renderMode: "auto",
+    var defaultConfig = {
+        // Render server URL (default to public PlantUML server)
+        serverUrl: "http://www.plantuml.com/plantuml",
 
-    // Output format: "svg" or "png"
-    outputFormat: "svg",
+        // Render mode: "auto" (real-time) or "manual" (trigger on demand)
+        renderMode: "auto",
 
-    // Request timeout in milliseconds
-    timeout: 10000,
+        // Output format: "svg" or "png"
+        outputFormat: "svg",
 
-    // Cache limit (number of rendered images to cache)
-    cacheLimit: 20,
+        // Request timeout in milliseconds
+        timeout: 10000,
 
-    // Debounce delay for real-time rendering (ms)
-    debounceDelay: 500,
-};
+        // Cache limit (number of rendered images to cache)
+        cacheLimit: 20,
 
-module.exports = defaultConfig;
+        // Debounce delay for real-time rendering (ms)
+        debounceDelay: 500,
+    };
+
+    // UMD 导出
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = defaultConfig;
+    } else if (typeof define === 'function' && define.amd) {
+        define(function() { return defaultConfig; });
+    } else {
+        root.PlantUMLDefaultConfig = defaultConfig;
+    }
+
+})(typeof global !== 'undefined' ? global : window);

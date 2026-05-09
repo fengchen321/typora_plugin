@@ -1,145 +1,170 @@
 // plugin/custom/plugins/plantuml/detector.js
+// PlantUML 代码块检测器 - UMD 模块
 
-const NamespaceManager = require("../core/namespace");
-const EventBus = require("../core/eventBus");
+(function(root) {
+    'use strict';
 
-class PlantUMLDetector {
-    constructor() {
+    // 植入依赖
+    var NamespaceManager = root.NamespaceManager;
+    var EventBus = root.EventBus;
+
+    if (!NamespaceManager || !EventBus) {
+        console.error('[PlantUML Detector] Missing dependencies: NamespaceManager or EventBus');
+        return;
+    }
+
+    function PlantUMLDetector() {
         this.observer = null;
         this.blocks = new Map();
         this.ns = NamespaceManager;
     }
 
-    // Start monitoring DOM
-    start() {
-        const editor = document.querySelector("#write");
+    PlantUMLDetector.prototype.start = function() {
+        var self = this;
+        var editor = document.querySelector("#write");
         if (!editor) {
             console.error("PlantUML Detector: Editor not found");
             return;
         }
 
-        // Initial scan
+        // 初始扫描
         this._scanExistingBlocks();
 
-        // Start observing
-        this.observer = new MutationObserver((mutations) => {
-            this._handleMutations(mutations);
+        // 启动观察器
+        this.observer = new MutationObserver(function(mutations) {
+            self._handleMutations(mutations);
         });
 
         this.observer.observe(editor, {
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ["class", "data-lang"],
+            attributeFilter: ["class", "data-lang"]
         });
-    }
+    };
 
-    // Stop monitoring
-    stop() {
+    PlantUMLDetector.prototype.stop = function() {
         if (this.observer) {
             this.observer.disconnect();
             this.observer = null;
         }
         this.blocks.clear();
-    }
+    };
 
-    // Scan existing blocks on start
-    _scanExistingBlocks() {
-        const blocks = document.querySelectorAll('pre.md-fences[data-lang="plantuml"]');
-        blocks.forEach((block) => this._registerBlock(block));
-    }
+    PlantUMLDetector.prototype._scanExistingBlocks = function() {
+        var self = this;
+        var blocks = document.querySelectorAll('pre.md-fences[data-lang="plantuml"]');
+        blocks.forEach(function(block) {
+            self._registerBlock(block);
+        });
+    };
 
-    // Handle DOM mutations
-    _handleMutations(mutations) {
-        for (const mutation of mutations) {
+    PlantUMLDetector.prototype._handleMutations = function(mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            var mutation = mutations[i];
             if (mutation.type === "childList") {
-                for (const node of mutation.addedNodes) {
-                    this._checkNode(node);
+                for (var j = 0; j < mutation.addedNodes.length; j++) {
+                    this._checkNode(mutation.addedNodes[j]);
                 }
             } else if (mutation.type === "attributes") {
                 this._checkNode(mutation.target);
             }
         }
-    }
+    };
 
-    // Check if node contains PlantUML blocks
-    _checkNode(node) {
+    PlantUMLDetector.prototype._checkNode = function(node) {
         if (!node.querySelectorAll && !node.matches) return;
 
-        const blocks = node.querySelectorAll?.('pre.md-fences[data-lang="plantuml"]')
-            || (node.matches?.('pre.md-fences[data-lang="plantuml"]') ? [node] : []);
-
-        for (const block of blocks) {
-            this._registerBlock(block);
+        var blocks;
+        if (node.querySelectorAll) {
+            blocks = node.querySelectorAll('pre.md-fences[data-lang="plantuml"]');
         }
-    }
+        if (!blocks && node.matches && node.matches('pre.md-fences[data-lang="plantuml"]')) {
+            blocks = [node];
+        }
 
-    // Register a new code block
-    _registerBlock(element) {
-        // Skip if already registered
+        if (blocks) {
+            for (var i = 0; i < blocks.length; i++) {
+                this._registerBlock(blocks[i]);
+            }
+        }
+    };
+
+    PlantUMLDetector.prototype._registerBlock = function(element) {
+        // 跳过已注册的块
         if (element.hasAttribute(this.ns.dataAttr("block-id"))) return;
 
-        const blockId = this._generateId();
+        var blockId = this._generateId();
         element.setAttribute(this.ns.dataAttr("block-id"), blockId);
 
-        const content = this._extractContent(element);
-        this.blocks.set(blockId, { element, content, state: "pending" });
+        var content = this._extractContent(element);
+        this.blocks.set(blockId, { element: element, content: content, state: "pending" });
 
-        // Emit event
-        EventBus.emit("plantuml:block-detected", { blockId, content });
-    }
+        // 发送事件
+        EventBus.emit("plantuml:block-detected", { blockId: blockId, content: content });
+    };
 
-    // Extract code content from element
-    _extractContent(element) {
-        // Typora uses CodeMirror for code blocks
-        const cmContent = element.querySelector(".CodeMirror-code");
+    PlantUMLDetector.prototype._extractContent = function(element) {
+        // Typora 使用 CodeMirror 来渲染代码块
+        var cmContent = element.querySelector(".CodeMirror-code");
         if (cmContent) {
-            // Get text from CodeMirror lines
-            const lines = cmContent.querySelectorAll(".CodeMirror-line");
-            return Array.from(lines).map(line => line.textContent).join("\n");
+            var lines = cmContent.querySelectorAll(".CodeMirror-line");
+            var contents = [];
+            for (var i = 0; i < lines.length; i++) {
+                contents.push(lines[i].textContent);
+            }
+            return contents.join("\n");
         }
 
-        // Fallback: direct text content
-        const codeElement = element.querySelector("code") || element;
+        // 备选方案：直接文本内容
+        var codeElement = element.querySelector("code") || element;
         return codeElement.textContent || "";
-    }
+    };
 
-    // Generate unique block ID
-    _generateId() {
-        return `plantuml-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-    }
+    PlantUMLDetector.prototype._generateId = function() {
+        return "plantuml-" + Date.now() + "-" + Math.random().toString(36).substring(2, 11);
+    };
 
-    // Get block info
-    getBlock(blockId) {
+    PlantUMLDetector.prototype.getBlock = function(blockId) {
         return this.blocks.get(blockId);
-    }
+    };
 
-    // Update block content (after edit)
-    updateBlockContent(blockId) {
-        const block = this.blocks.get(blockId);
+    PlantUMLDetector.prototype.updateBlockContent = function(blockId) {
+        var block = this.blocks.get(blockId);
         if (!block) return;
 
-        const newContent = this._extractContent(block.element);
+        var newContent = this._extractContent(block.element);
 
-        // Only emit if content actually changed
+        // 只在内容变化时发送事件
         if (newContent !== block.content) {
             block.content = newContent;
             block.state = "modified";
-            EventBus.emit("plantuml:block-updated", { blockId, content: newContent });
+            EventBus.emit("plantuml:block-updated", { blockId: blockId, content: newContent });
         }
-    }
+    };
 
-    // Find current block (for manual trigger)
-    findCurrentBlock() {
-        const activeElement = document.activeElement;
+    PlantUMLDetector.prototype.findCurrentBlock = function() {
+        var activeElement = document.activeElement;
         if (!activeElement) return null;
 
-        const block = activeElement.closest('pre.md-fences[data-lang="plantuml"]');
+        var block = activeElement.closest('pre.md-fences[data-lang="plantuml"]');
         if (!block) return null;
 
-        const blockId = block.getAttribute(this.ns.dataAttr("block-id"));
-        return blockId ? { id: blockId, ...this.blocks.get(blockId) } : null;
-    }
-}
+        var blockId = block.getAttribute(this.ns.dataAttr("block-id"));
+        if (blockId) {
+            var blockData = this.blocks.get(blockId);
+            return blockData ? { id: blockId, element: blockData.element, content: blockData.content } : null;
+        }
+        return null;
+    };
 
-module.exports = PlantUMLDetector;
+    // UMD 导出
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = PlantUMLDetector;
+    } else if (typeof define === 'function' && define.amd) {
+        define(function() { return PlantUMLDetector; });
+    } else {
+        root.PlantUMLDetector = PlantUMLDetector;
+    }
+
+})(typeof global !== 'undefined' ? global : window);

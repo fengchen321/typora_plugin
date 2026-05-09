@@ -1,200 +1,219 @@
 // plugin/custom/plugins/plantuml/uiController.js
+// PlantUML UI 控制器 - UMD 模块
 
-const NamespaceManager = require("../core/namespace");
-const EventBus = require("../core/eventBus");
+(function(root) {
+    'use strict';
 
-class PlantUMLUIController {
-    constructor() {
+    // 植入依赖
+    var NamespaceManager = root.NamespaceManager;
+    var EventBus = root.EventBus;
+
+    if (!NamespaceManager || !EventBus) {
+        console.error('[PlantUML UIController] Missing dependencies: NamespaceManager or EventBus');
+        return;
+    }
+
+    function PlantUMLUIController() {
         this.ns = NamespaceManager;
         this.activeBlockId = null;
         this.exitHandler = null;
     }
 
-    // Create preview container and insert after code block
-    createPreview(blockId, originalElement, imageUrl) {
-        // Create container
-        const container = document.createElement("div");
+    PlantUMLUIController.prototype.createPreview = function(blockId, originalElement, imageUrl) {
+        var self = this;
+
+        // 创建容器
+        var container = document.createElement("div");
         container.className = this.ns.cls("preview-container");
         container.setAttribute(this.ns.dataAttr("block-id"), blockId);
         container.setAttribute(this.ns.dataAttr("state"), "rendered");
 
-        // Create image
-        const img = document.createElement("img");
+        // 创建图片
+        var img = document.createElement("img");
         img.src = imageUrl;
         img.className = this.ns.cls("preview-image");
         img.alt = "PlantUML Diagram";
 
-        // Create toolbar
-        const toolbar = this._createToolbar(blockId);
+        // 创建工具栏
+        var toolbar = this._createToolbar(blockId);
 
-        // Assemble
+        // 组装
         container.appendChild(img);
         container.appendChild(toolbar);
 
-        // Hide original block and insert preview
+        // 隐藏原始代码块并插入预览
         originalElement.style.display = "none";
         originalElement.insertAdjacentElement("afterend", container);
 
-        // Bind events
+        // 绑定事件
         this._bindEvents(container, blockId, originalElement);
 
         return container;
-    }
+    };
 
-    // Create toolbar with edit/refresh buttons
-    _createToolbar(blockId) {
-        const toolbar = document.createElement("div");
+    PlantUMLUIController.prototype._createToolbar = function(blockId) {
+        var self = this;
+        var toolbar = document.createElement("div");
         toolbar.className = this.ns.cls("toolbar");
 
-        const editBtn = document.createElement("button");
+        var editBtn = document.createElement("button");
         editBtn.className = this.ns.cls("toolbar-btn edit-btn");
         editBtn.textContent = "Edit";
-        editBtn.onclick = () => this.enterEditMode(blockId);
+        editBtn.onclick = function() {
+            self.enterEditMode(blockId);
+        };
 
-        const refreshBtn = document.createElement("button");
+        var refreshBtn = document.createElement("button");
         refreshBtn.className = this.ns.cls("toolbar-btn refresh-btn");
         refreshBtn.textContent = "Refresh";
-        refreshBtn.onclick = () => EventBus.emit("plantuml:refresh-requested", { blockId });
+        refreshBtn.onclick = function() {
+            EventBus.emit("plantuml:refresh-requested", { blockId: blockId });
+        };
 
         toolbar.appendChild(editBtn);
         toolbar.appendChild(refreshBtn);
 
         return toolbar;
-    }
+    };
 
-    // Bind interaction events
-    _bindEvents(container, blockId, originalElement) {
-        const img = container.querySelector(`.${this.ns.cls("preview-image")}`);
+    PlantUMLUIController.prototype._bindEvents = function(container, blockId, originalElement) {
+        var self = this;
+        var img = container.querySelector("." + this.ns.cls("preview-image"));
 
-        // Double-click to edit
-        img.addEventListener("dblclick", (e) => {
+        // 双击编辑
+        img.addEventListener("dblclick", function(e) {
             e.preventDefault();
-            this.enterEditMode(blockId);
+            self.enterEditMode(blockId);
         });
 
-        // Single-click to enlarge (optional future feature)
-        img.addEventListener("click", (e) => {
-            // Placeholder for enlarge feature
+        // 单击放大（可选的 future feature）
+        img.addEventListener("click", function(e) {
+            // 预留给放大功能
         });
-    }
+    };
 
-    // Enter edit mode: show code, hide preview
-    enterEditMode(blockId) {
-        const preview = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"].${this.ns.cls("preview-container")}`);
-        const codeBlock = document.querySelector(`pre[${this.ns.dataAttr("block-id")}="${blockId}"]`);
+    PlantUMLUIController.prototype.enterEditMode = function(blockId) {
+        var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
+        var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
 
         if (!preview || !codeBlock) return;
 
-        // Hide preview
+        // 隐藏预览
         preview.style.display = "none";
 
-        // Show code block and focus
+        // 显示代码块并聚焦
         codeBlock.style.display = "";
         codeBlock.focus();
 
         this.activeBlockId = blockId;
 
-        // Set up exit handler
+        // 设置退出处理器
         this._setupExitHandler(blockId);
-    }
+    };
 
-    // Set up handler to exit edit mode on outside click
-    _setupExitHandler(blockId) {
-        // Remove previous handler if exists
+    PlantUMLUIController.prototype._setupExitHandler = function(blockId) {
+        var self = this;
+
+        // 移除之前的处理器
         if (this.exitHandler) {
             document.removeEventListener("click", this.exitHandler);
         }
 
-        this.exitHandler = (e) => {
-            const block = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"]`);
+        this.exitHandler = function(e) {
+            var block = document.querySelector("[" + self.ns.dataAttr("block-id") + '="' + blockId + '"]');
             if (!block) return;
 
-            const preview = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"].${this.ns.cls("preview-container")}`);
-            const codeBlock = document.querySelector(`pre[${this.ns.dataAttr("block-id")}="${blockId}"]`);
+            var preview = document.querySelector("[" + self.ns.dataAttr("block-id") + '="' + blockId + '"].' + self.ns.cls("preview-container"));
+            var codeBlock = document.querySelector("pre[" + self.ns.dataAttr("block-id") + '="' + blockId + '"]');
 
-            // Check if click is outside both preview and code block
+            // 检查点击是否在预览和代码块之外
             if (preview && codeBlock &&
                 !preview.contains(e.target) &&
                 !codeBlock.contains(e.target)) {
 
-                this.exitEditMode(blockId);
+                self.exitEditMode(blockId);
             }
         };
 
-        // Delay to avoid immediate trigger
-        setTimeout(() => {
-            document.addEventListener("click", this.exitHandler);
+        // 延迟添加以避免立即触发
+        setTimeout(function() {
+            document.addEventListener("click", self.exitHandler);
         }, 100);
-    }
+    };
 
-    // Exit edit mode: re-render and show preview
-    exitEditMode(blockId) {
-        // Remove exit handler
+    PlantUMLUIController.prototype.exitEditMode = function(blockId) {
+        // 移除退出处理器
         if (this.exitHandler) {
             document.removeEventListener("click", this.exitHandler);
             this.exitHandler = null;
         }
 
-        // Request update from detector
-        EventBus.emit("plantuml:exit-edit", { blockId });
+        // 请求更新
+        EventBus.emit("plantuml:exit-edit", { blockId: blockId });
 
         this.activeBlockId = null;
-    }
+    };
 
-    // Show preview (hide code)
-    showPreview(blockId) {
-        const preview = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"].${this.ns.cls("preview-container")}`);
-        const codeBlock = document.querySelector(`pre[${this.ns.dataAttr("block-id")}="${blockId}"]`);
+    PlantUMLUIController.prototype.showPreview = function(blockId) {
+        var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
+        var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
 
         if (preview) preview.style.display = "";
         if (codeBlock) codeBlock.style.display = "none";
-    }
+    };
 
-    // Show loading state
-    showLoading(blockId) {
-        const preview = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"].${this.ns.cls("preview-container")}`);
+    PlantUMLUIController.prototype.showLoading = function(blockId) {
+        var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
         if (!preview) return;
 
-        preview.innerHTML = `<div class="${this.ns.cls("loading")}"></div>`;
+        preview.innerHTML = '<div class="' + this.ns.cls("loading") + '"></div>';
         preview.setAttribute(this.ns.dataAttr("state"), "loading");
-    }
+    };
 
-    // Show error message
-    showError(blockId, error) {
-        const preview = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"].${this.ns.cls("preview-container")}`);
+    PlantUMLUIController.prototype.showError = function(blockId, error) {
+        var self = this;
+        var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
         if (!preview) return;
 
-        preview.innerHTML = `
-            <div class="${this.ns.cls("error")}">
-                <span class="${this.ns.cls("error-icon")}">!</span>
-                <span class="${this.ns.cls("error-message")}">${this._escapeHtml(error.message || "Render failed")}</span>
-                <button class="${this.ns.cls("retry-btn")}">Retry</button>
-            </div>
-        `;
+        var errorMsg = error.message || "Render failed";
+        preview.innerHTML =
+            '<div class="' + this.ns.cls("error") + '">' +
+            '  <span class="' + this.ns.cls("error-icon") + '">!</span>' +
+            '  <span class="' + this.ns.cls("error-message") + '">' + this._escapeHtml(errorMsg) + '</span>' +
+            '  <button class="' + this.ns.cls("retry-btn") + '">Retry</button>' +
+            '</div>';
         preview.setAttribute(this.ns.dataAttr("state"), "error");
 
-        // Bind retry button
-        const retryBtn = preview.querySelector(`.${this.ns.cls("retry-btn")}`);
+        // 绑定重试按钮
+        var retryBtn = preview.querySelector("." + this.ns.cls("retry-btn"));
         if (retryBtn) {
-            retryBtn.onclick = () => EventBus.emit("plantuml:refresh-requested", { blockId });
+            retryBtn.onclick = function() {
+                EventBus.emit("plantuml:refresh-requested", { blockId: blockId });
+            };
         }
-    }
+    };
 
-    // Escape HTML for safe display
-    _escapeHtml(text) {
-        const div = document.createElement("div");
+    PlantUMLUIController.prototype._escapeHtml = function(text) {
+        var div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
-    }
+    };
 
-    // Remove preview
-    removePreview(blockId) {
-        const preview = document.querySelector(`[${this.ns.dataAttr("block-id")}="${blockId}"].${this.ns.cls("preview-container")}`);
+    PlantUMLUIController.prototype.removePreview = function(blockId) {
+        var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
         if (preview) preview.remove();
 
-        const codeBlock = document.querySelector(`pre[${this.ns.dataAttr("block-id")}="${blockId}"]`);
+        var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
         if (codeBlock) codeBlock.style.display = "";
-    }
-}
+    };
 
-module.exports = PlantUMLUIController;
+    // UMD 导出
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = PlantUMLUIController;
+    } else if (typeof define === 'function' && define.amd) {
+        define(function() { return PlantUMLUIController; });
+    } else {
+        root.PlantUMLUIController = PlantUMLUIController;
+    }
+
+})(typeof global !== 'undefined' ? global : window);

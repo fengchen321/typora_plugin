@@ -1,116 +1,132 @@
 // plugin/custom/plugins/plantuml/renderer.js
+// PlantUML 渲染器 - UMD 模块
 
-// PlantUML uses a custom base64 character set
-const UML_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
-const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+(function(root) {
+    'use strict';
 
-class PlantUMLRenderer {
-    constructor(config) {
+    // PlantUML 使用自定义 base64 字符集
+    var UML_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+
+    function PlantUMLRenderer(config) {
         this.config = config;
         this.cache = new Map();
     }
 
-    // Encode PlantUML text for server URL
-    encode(text) {
-        // Use Node.js zlib for deflate compression
-        const zlib = require("zlib");
+    PlantUMLRenderer.prototype.encode = function(text) {
+        // 使用 Node.js zlib 进行 deflate 压缩
+        var zlib;
+        var reqnode = global.reqnode || global.require;
+        if (reqnode) {
+            zlib = reqnode("zlib");
+        }
 
-        // 1. Deflate compress
-        const compressed = zlib.deflateRawSync(Buffer.from(text, "utf-8"));
+        if (!zlib) {
+            throw new Error("Cannot load zlib module. PlantUML encoding requires Node.js zlib.");
+        }
 
-        // 2. Convert to standard base64
-        const base64 = compressed.toString("base64");
+        // 1. Deflate 压缩
+        var compressed = zlib.deflateRawSync(Buffer.from(text, "utf-8"));
 
-        // 3. Map to PlantUML's custom character set
-        let result = "";
-        for (let i = 0; i < base64.length; i++) {
-            const c = base64[i];
+        // 2. 转换为标准 base64
+        var base64 = compressed.toString("base64");
+
+        // 3. 映射到 PlantUML 自定义字符集
+        var result = "";
+        for (var i = 0; i < base64.length; i++) {
+            var c = base64[i];
+            var code = c.charCodeAt(0);
             if (c >= "A" && c <= "Z") {
-                result += UML_CHARS[c.charCodeAt(0) - 65 + 10];
+                result += UML_CHARS[code - 65 + 10];
             } else if (c >= "a" && c <= "z") {
-                result += UML_CHARS[c.charCodeAt(0) - 97 + 36];
+                result += UML_CHARS[code - 97 + 36];
             } else if (c >= "0" && c <= "9") {
-                result += UML_CHARS[c.charCodeAt(0) - 48];
+                result += UML_CHARS[code - 48];
             } else if (c === "+") {
                 result += "-";
             } else if (c === "/") {
                 result += "_";
             } else {
-                result += c; // '=' remains as is
+                result += c; // '=' 保持不变
             }
         }
         return result;
-    }
+    };
 
-    // Render PlantUML content, return image URL
-    async render(content) {
-        // Check cache first
-        const cacheKey = this._hashContent(content);
+    PlantUMLRenderer.prototype.render = async function(content) {
+        var self = this;
+
+        // 先检查缓存
+        var cacheKey = this._hashContent(content);
         if (this.cache.has(cacheKey)) {
             return this.cache.get(cacheKey);
         }
 
-        // Encode and build URL
-        const encoded = this.encode(content);
-        const url = `${this.config.serverUrl}/${this.config.outputFormat}/${encoded}`;
+        // 编码并构建 URL
+        var encoded = this.encode(content);
+        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/" + encoded;
 
-        // Preload image to verify it works
+        // 预加载图片以验证其有效
         await this._loadImage(url);
 
-        // Cache result
+        // 缓存结果
         this._addToCache(cacheKey, url);
 
         return url;
-    }
+    };
 
-    // Preload image with timeout
-    async _loadImage(url) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            const timeout = setTimeout(() => {
+    PlantUMLRenderer.prototype._loadImage = function(url) {
+        var self = this;
+        return new Promise(function(resolve, reject) {
+            var img = new Image();
+            var timeout = setTimeout(function() {
                 img.src = "";
                 reject(new Error("Image load timeout"));
-            }, this.config.timeout);
+            }, self.config.timeout);
 
-            img.onload = () => {
+            img.onload = function() {
                 clearTimeout(timeout);
                 resolve(url);
             };
 
-            img.onerror = () => {
+            img.onerror = function() {
                 clearTimeout(timeout);
                 reject(new Error("Failed to load image"));
             };
 
             img.src = url;
         });
-    }
+    };
 
-    // Simple content hash for caching
-    _hashContent(content) {
-        let hash = 0;
-        for (let i = 0; i < content.length; i++) {
-            const char = content.charCodeAt(i);
+    PlantUMLRenderer.prototype._hashContent = function(content) {
+        var hash = 0;
+        for (var i = 0; i < content.length; i++) {
+            var char = content.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
         return Math.abs(hash).toString(16);
-    }
+    };
 
-    // Add to cache with LRU eviction
-    _addToCache(key, value) {
-        // Evict oldest if over limit
+    PlantUMLRenderer.prototype._addToCache = function(key, value) {
+        // 超出限制时淘汰最旧的条目
         if (this.cache.size >= this.config.cacheLimit) {
-            const firstKey = this.cache.keys().next().value;
+            var firstKey = this.cache.keys().next().value;
             this.cache.delete(firstKey);
         }
         this.cache.set(key, value);
-    }
+    };
 
-    // Clear cache
-    clearCache() {
+    PlantUMLRenderer.prototype.clearCache = function() {
         this.cache.clear();
-    }
-}
+    };
 
-module.exports = PlantUMLRenderer;
+    // UMD 导出
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = PlantUMLRenderer;
+    } else if (typeof define === 'function' && define.amd) {
+        define(function() { return PlantUMLRenderer; });
+    } else {
+        root.PlantUMLRenderer = PlantUMLRenderer;
+    }
+
+})(typeof global !== 'undefined' ? global : window);

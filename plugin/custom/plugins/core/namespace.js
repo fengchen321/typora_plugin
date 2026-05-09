@@ -1,12 +1,36 @@
 // plugin/custom/plugins/core/namespace.js
+// CSS 命名空间管理 - UMD 模块
 
-const PREFIX = "tp_";
+(function(root) {
+    'use strict';
 
-const NamespaceManager = {
-    cls: (name) => `${PREFIX}${name}`,
-    dataAttr: (name) => `data-${PREFIX}${name}`,
-    event: (name) => `${PREFIX}:${name}`,
-    selector: (name) => `.${PREFIX}${name}`,
-};
+    const PREFIX = "tp_";
 
-module.exports = NamespaceManager;
+    const NamespaceManager = {
+        cls: function(name) {
+            return PREFIX + name;
+        },
+
+        dataAttr: function(name) {
+            return "data-" + PREFIX + name;
+        },
+
+        event: function(name) {
+            return PREFIX + ":" + name;
+        },
+
+        selector: function(name) {
+            return "." + PREFIX + name;
+        }
+    };
+
+    // UMD 导出
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = NamespaceManager;
+    } else if (typeof define === 'function' && define.amd) {
+        define(function() { return NamespaceManager; });
+    } else {
+        root.NamespaceManager = NamespaceManager;
+    }
+
+})(typeof global !== 'undefined' ? global : window);
