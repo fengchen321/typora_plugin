@@ -108,63 +108,72 @@
         // Linux: ~/.config/Typora/plugins/
 
         const fs = _require('fs');
-
-        // 方式1: 检查 Typora 用户数据目录
         const process = _require('process');
         const os = _require('os');
 
         let candidatePaths = [];
 
-        // Windows
+        // 方式1: 通过 script 标签的 src 解析（最可靠）
+        const scripts = document.querySelectorAll('script[src*="plugin/index.js"], script[src*="plugins/index.js"]');
+        console.log('[PlantUML Plugin] Found scripts:', scripts.length);
+        for (let i = 0; i < scripts.length; i++) {
+            const src = scripts[i].src;
+            console.log('[PlantUML Plugin] Script src:', src);
+            if (src) {
+                // file:// 协议
+                if (src.startsWith('file://')) {
+                    const filePath = decodeURIComponent(src.replace(/^file:\/\//, '').replace(/^\/([A-Za-z]:)/, '$1'));
+                    const pluginDir = path.dirname(filePath);
+                    console.log('[PlantUML Plugin] Derived from script:', pluginDir);
+                    return pluginDir;
+                }
+                // typora:// 协议（Typora 内部）
+                if (src.startsWith('typora://')) {
+                    // typora://app/typemark/plugin/index.js -> 需要转换
+                    // 这种情况下使用备选方案
+                    console.log('[PlantUML Plugin] typora:// protocol detected');
+                }
+            }
+        }
+
+        // 方式2: 检查 Typora 用户数据目录
         if (process.platform === 'win32') {
             candidatePaths = [
                 path.join(process.env.APPDATA || '', 'Typora', 'plugins'),
                 path.join(process.env.LOCALAPPDATA || '', 'Typora', 'plugins'),
             ];
-        }
-        // macOS
-        else if (process.platform === 'darwin') {
+        } else if (process.platform === 'darwin') {
             candidatePaths = [
                 path.join(os.homedir(), 'Library', 'Application Support', 'Typora', 'plugins'),
             ];
-        }
-        // Linux
-        else {
+        } else {
             candidatePaths = [
                 path.join(os.homedir(), '.config', 'Typora', 'plugins'),
             ];
         }
 
-        // 添加 Typora 安装目录下的 plugins
-        // __dirname 在 Typora 中指向 electron.asar/renderer
+        // 方式3: 添加 Typora 安装目录下的 plugins
         if (typeof __dirname !== 'undefined') {
+            console.log('[PlantUML Plugin] __dirname:', __dirname);
             // 从 electron.asar/renderer 向上找到 resources 目录
             const resourcesDir = path.dirname(path.dirname(__dirname));
             candidatePaths.push(path.join(resourcesDir, 'plugins'));
         }
 
         // 查找存在的插件目录
+        console.log('[PlantUML Plugin] Candidate paths:', candidatePaths);
         for (const pluginPath of candidatePaths) {
             try {
+                console.log('[PlantUML Plugin] Checking:', pluginPath);
                 if (fs.existsSync(pluginPath)) {
                     const indexPath = path.join(pluginPath, 'index.js');
                     if (fs.existsSync(indexPath)) {
+                        console.log('[PlantUML Plugin] Found valid plugin dir:', pluginPath);
                         return pluginPath;
                     }
                 }
             } catch (e) {
-                // 忽略权限错误，继续尝试下一个路径
-            }
-        }
-
-        // 方式2: 通过 script 标签的 src 解析
-        const scripts = document.querySelectorAll('script[src*="plugin/index.js"]');
-        if (scripts.length > 0) {
-            const src = scripts[0].src;
-            // file:// 协议
-            if (src.startsWith('file://')) {
-                const filePath = decodeURIComponent(src.replace(/^file:\/\//, ''));
-                return path.dirname(filePath);
+                console.log('[PlantUML Plugin] Error checking path:', pluginPath, e.message);
             }
         }
 
