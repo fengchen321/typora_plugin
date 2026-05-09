@@ -106,7 +106,7 @@ class PlantUMLDetector {
 
     // Generate unique block ID
     _generateId() {
-        return `plantuml-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return `plantuml-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     }
 
     // Get block info

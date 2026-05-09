@@ -1,0 +1,131 @@
+/* plugin/custom/plugins/plantuml/style.css */
+
+/* Preview container */
+.tp_preview-container {
+    margin: 16px 0;
+    padding: 12px;
+    background: var(--bg-color, #f8f9fa);
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #e9ecef);
+    position: relative;
+}
+
+/* Preview image */
+.tp_preview-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    cursor: pointer;
+}
+
+/* Toolbar */
+.tp_toolbar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.tp_preview-container:hover .tp_toolbar {
+    opacity: 1;
+}
+
+.tp_toolbar-btn {
+    padding: 4px 12px;
+    background: var(--btn-bg, white);
+    border: 1px solid var(--btn-border, #dee2e6);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text-color, #333);
+}
+
+.tp_toolbar-btn:hover {
+    background: var(--btn-hover-bg, #f1f3f4);
+}
+
+/* Error display */
+.tp_error {
+    padding: 16px;
+    background: var(--error-bg, #fff3cd);
+    border: 1px solid var(--error-border, #ffc107);
+    border-radius: 4px;
+    color: var(--error-text, #856404);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tp_error-icon {
+    font-size: 18px;
+}
+
+.tp_error-message {
+    flex: 1;
+    min-width: 100px;
+    font-family: monospace;
+    word-break: break-word;
+}
+
+.tp_retry-btn {
+    padding: 4px 12px;
+    background: var(--retry-bg, #ffc107);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.tp_retry-btn:hover {
+    background: var(--retry-hover-bg, #e0a800);
+}
+
+/* Loading state */
+.tp_loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    min-height: 100px;
+}
+
+.tp_loading::after {
+    content: "";
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--spinner-border, #e9ecef);
+    border-top-color: var(--spinner-accent, #007bff);
+    border-radius: 50%;
+    animation: tp_spin 1s linear infinite;
+}
+
+@keyframes tp_spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .tp_preview-container {
+        --bg-color: #2d2d2d;
+        --border-color: #404040;
+        --btn-bg: #3d3d3d;
+        --btn-border: #505050;
+        --btn-hover-bg: #4d4d4d;
+        --text-color: #e0e0e0;
+        --error-bg: #4d3d00;
+        --error-border: #665200;
+        --error-text: #ffd966;
+        --retry-bg: #665200;
+        --retry-hover-bg: #806600;
+        --spinner-border: #404040;
+        --spinner-accent: #4da6ff;
+    }
+}

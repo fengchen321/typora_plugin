@@ -1,0 +1,29 @@
+# Custom Plugin Configuration
+# This file contains user-level configurations for custom plugins
+
+[plantuml]
+name = "PlantUML"
+enable = true
+hide = false
+order = 1
+
+# Hotkey to manually trigger render
+hotkey = "ctrl+shift+u"
+
+# Render mode: "auto" for real-time, "manual" for on-demand
+renderMode = "auto"
+
+# Server URL (default: public PlantUML server)
+serverUrl = "http://www.plantuml.com/plantuml"
+
+# Output format: "svg" or "png"
+outputFormat = "svg"
+
+# Request timeout (ms)
+timeout = 10000
+
+# Cache limit
+cacheLimit = 20
+
+# Debounce delay for auto mode (ms)
+debounceDelay = 500
