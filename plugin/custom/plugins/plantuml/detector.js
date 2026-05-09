@@ -23,12 +23,16 @@
         var self = this;
         var editor = document.querySelector("#write");
         if (!editor) {
-            console.error("PlantUML Detector: Editor not found");
+            console.error("[PlantUML Detector] Editor #write not found");
             return;
         }
 
-        // 初始扫描
-        this._scanExistingBlocks();
+        console.log("[PlantUML Detector] Starting, editor found:", editor);
+
+        // 初始扫描（延迟执行，等待 Typora 渲染完成）
+        setTimeout(function() {
+            self._scanExistingBlocks();
+        }, 500);
 
         // 启动观察器
         this.observer = new MutationObserver(function(mutations) {
@@ -41,6 +45,8 @@
             attributes: true,
             attributeFilter: ["class", "data-lang"]
         });
+
+        console.log("[PlantUML Detector] Observer started");
     };
 
     PlantUMLDetector.prototype.stop = function() {
@@ -54,6 +60,7 @@
     PlantUMLDetector.prototype._scanExistingBlocks = function() {
         var self = this;
         var blocks = document.querySelectorAll('pre.md-fences[data-lang="plantuml"]');
+        console.log("[PlantUML Detector] Scanning, found blocks:", blocks.length);
         blocks.forEach(function(block) {
             self._registerBlock(block);
         });
@@ -92,13 +99,18 @@
 
     PlantUMLDetector.prototype._registerBlock = function(element) {
         // 跳过已注册的块
-        if (element.hasAttribute(this.ns.dataAttr("block-id"))) return;
+        if (element.hasAttribute(this.ns.dataAttr("block-id"))) {
+            console.log("[PlantUML Detector] Block already registered, skipping");
+            return;
+        }
 
         var blockId = this._generateId();
         element.setAttribute(this.ns.dataAttr("block-id"), blockId);
 
         var content = this._extractContent(element);
         this.blocks.set(blockId, { element: element, content: content, state: "pending" });
+
+        console.log("[PlantUML Detector] Registered block:", blockId, "content length:", content.length);
 
         // 发送事件
         EventBus.emit("plantuml:block-detected", { blockId: blockId, content: content });

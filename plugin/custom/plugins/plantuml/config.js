@@ -22,6 +22,9 @@
 
         // Debounce delay for real-time rendering (ms)
         debounceDelay: 500,
+
+        // Hotkey for manual render (Ctrl+Shift+U)
+        hotkey: "ctrl+shift+u",
     };
 
     // UMD 导出
