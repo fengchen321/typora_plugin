@@ -18,33 +18,46 @@
 ### 前置要求
 
 - Typora 版本 ≥ 0.9.98（最后一个免费版本）
-- Windows 或 Linux 平台
+- Windows、macOS 或 Linux 平台
 
-### 步骤一：找到 window.html
+### 步骤一：创建插件目录
 
-根据您的 Typora 版本，找到 `window.html` 文件：
+根据您的操作系统，创建插件目录：
 
-- **正式版 Typora**：`Typora安装目录/resources/window.html`
-- **免费版 Typora**：`Typora安装目录/resources/app/window.html`
+- **Windows**: `%APPDATA%\Typora\plugins\` 或 `%LOCALAPPDATA%\Typora\plugins\`
+- **macOS**: `~/Library/Application Support/Typora/plugins/`
+- **Linux**: `~/.config/Typora/plugins/`
+
+如果目录不存在，请手动创建。
+
+> 也可以将插件放在 Typora 安装目录下的 `resources/plugins/` 文件夹中。
 
 ### 步骤二：复制插件文件
 
-将本项目 `plugin` 目录复制到包含 `window.html` 的文件夹下：
+将本项目 `plugin` 目录内的所有内容复制到上述插件目录：
 
 ```
-Typora安装目录/resources/
-├── window.html          (或 app/window.html)
-└── plugin/
-    ├── index.js         (插件加载器入口)
-    ├── core/
-    │   └── base.js      (插件基类)
-    └── custom/
-        └── plugins/
-            ├── core/     (核心工具模块)
-            └── plantuml/ (PlantUML 插件)
+插件目录（如 %APPDATA%\Typora\plugins\）
+├── index.js              (插件加载器入口)
+└── custom/
+    └── plugins/
+        ├── core/         (核心工具模块)
+        │   ├── namespace.js
+        │   ├── eventBus.js
+        │   └── configManager.js
+        └── plantuml/     (PlantUML 插件)
+            ├── detector.js
+            ├── renderer.js
+            ├── uiController.js
+            └── config.js
 ```
 
 ### 步骤三：修改 window.html
+
+根据您的 Typora 版本，找到 `window.html` 文件：
+
+- **正式版 Typora**: `Typora安装目录/resources/window.html`
+- **免费版 Typora**: `Typora安装目录/resources/app/window.html`
 
 在 `window.html` 的 `</body>` 标签前添加一行：
 
@@ -54,7 +67,7 @@ Typora安装目录/resources/
 
 ### 步骤四：重启 Typora
 
-重启 Typora 后，插件将自动生效。您可以在控制台（按 shift + F12）看到加载成功的提示。
+重启 Typora 后，插件将自动生效。您可以在控制台（按 Shift + F12）看到加载成功的提示。
 
 ## 使用方法
 
@@ -112,8 +125,7 @@ localStorage.setItem('plantuml_plugin_config', JSON.stringify({
 ┌─────────────────────────────────────────────────────────────┐
 │                    PlantUML Plugin                          │
 ├─────────────────────────────────────────────────────────────┤
-│  plugin/index.js         插件加载器入口                      │
-│  plugin/core/base.js     插件基类                            │
+│  plugins/index.js        插件加载器入口                      │
 ├─────────────────────────────────────────────────────────────┤
 │  ConfigManager           管理用户配置（localStorage）         │
 │  EventBus                插件模块间通信（事件总线）            │
@@ -140,10 +152,8 @@ localStorage.setItem('plantuml_plugin_config', JSON.stringify({
 ## 文件结构
 
 ```
-plugin/
+plugins/                        # 插件目录（放在用户数据目录或 Typora resources 下）
 ├── index.js                   # 插件加载器（入口）
-├── core/
-│   └── base.js                # 插件基类（BasePlugin, BaseCustomPlugin）
 │
 └── custom/plugins/
     ├── core/                  # 核心工具模块（可复用）
@@ -152,7 +162,6 @@ plugin/
     │   └── configManager.js   # 配置管理
     │
     └── plantuml/              # PlantUML 插件
-        ├── index.js           # 插件入口
         ├── detector.js        # 代码块检测
         ├── renderer.js        # 渲染引擎
         ├── uiController.js    # UI 控制
@@ -163,23 +172,35 @@ plugin/
 
 核心模块设计为可复用，便于开发其他插件：
 
-1. 在 `plugin/custom/plugins/` 下创建新插件目录
-2. 引入核心工具模块：
+1. 在 `plugins/custom/plugins/` 下创建新插件目录
+2. 在插件模块中使用全局变量访问核心工具：
    ```javascript
-   const NamespaceManager = require("../core/namespace");
-   const EventBus = require("../core/eventBus");
-   const ConfigManager = require("../core/configManager");
+   // UMD 模块会自动从全局变量获取依赖
+   var NamespaceManager = root.NamespaceManager;
+   var EventBus = root.EventBus;
    ```
-3. 创建插件类并导出：
+3. 创建插件类并导出（使用 UMD 格式）：
    ```javascript
-   class MyPlugin {
-       constructor(config) { this.config = config; }
-       init() { /* 初始化逻辑 */ }
-       process() { /* 主处理逻辑 */ }
-   }
-   module.exports = { plugin: MyPlugin };
+   (function(root) {
+       'use strict';
+       
+       function MyPlugin(config) {
+           this.config = config;
+       }
+       
+       MyPlugin.prototype.init = function() {
+           // 使用 NamespaceManager 和 EventBus
+       };
+       
+       // UMD 导出
+       if (typeof module !== 'undefined' && module.exports) {
+           module.exports = MyPlugin;
+       } else {
+           root.MyPlugin = MyPlugin;
+       }
+   })(typeof global !== 'undefined' ? global : window);
    ```
-4. 在 `plugin/index.js` 中加载新插件
+4. 在 `plugins/index.js` 中加载新插件
 
 ## 已知限制
 
@@ -209,8 +230,9 @@ plugin/
 ### 插件未加载
 
 1. 确认 `window.html` 已正确添加脚本引用
-2. 确认 `plugin` 目录位置正确
+2. 确认插件目录位置正确（用户数据目录或 Typora resources 下的 `plugins` 文件夹）
 3. 检查控制台是否有加载错误
+4. 确认脚本引用路径正确：`./plugin/index.js`（相对于 window.html 的路径）
 
 ## 许可证
 
