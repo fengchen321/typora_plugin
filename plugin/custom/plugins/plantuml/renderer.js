@@ -32,19 +32,22 @@
         var compressed = zlib.deflateRawSync(buffer);
 
         console.log("[PlantUML Renderer] Compressed bytes:", compressed.length);
-        console.log("[PlantUML Renderer] First 10 bytes:", Array.prototype.slice.call(compressed, 0, 10));
+
+        // 打印前10个字节用于调试
+        var firstBytes = [];
+        for (var j = 0; j < Math.min(10, compressed.length); j++) {
+            firstBytes.push(compressed[j]);
+        }
+        console.log("[PlantUML Renderer] First 10 bytes:", firstBytes.join(", "));
 
         // 2. PlantUML 的自定义 base64 编码
-        // 确保我们处理的是 Uint8Array
-        var bytes = new Uint8Array(compressed);
         var result = "";
-        var len = bytes.length;
-        var i = 0;
+        var len = compressed.length;
 
-        while (i < len) {
-            var b1 = bytes[i++];
-            var b2 = (i < len) ? bytes[i++] : 0;
-            var b3 = (i < len) ? bytes[i++] : 0;
+        for (var i = 0; i < len; i += 3) {
+            var b1 = compressed[i];
+            var b2 = (i + 1 < len) ? compressed[i + 1] : 0;
+            var b3 = (i + 2 < len) ? compressed[i + 2] : 0;
 
             // 6位一组，映射到 PlantUML 字符集
             var c1 = (b1 >> 2) & 0x3F;
@@ -53,8 +56,8 @@
             var c4 = b3 & 0x3F;
 
             result += UML_CHARS[c1] + UML_CHARS[c2];
-            if (i - 2 < len) result += UML_CHARS[c3];
-            if (i - 1 < len) result += UML_CHARS[c4];
+            if (i + 1 < len) result += UML_CHARS[c3];
+            if (i + 2 < len) result += UML_CHARS[c4];
         }
 
         console.log("[PlantUML Renderer] Encoded result:", result);
