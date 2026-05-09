@@ -14,7 +14,6 @@
 
     PlantUMLRenderer.prototype.encode = function(text) {
         console.log("[PlantUML Renderer] Encoding text, length:", text.length);
-        console.log("[PlantUML Renderer] Text content:", text);
 
         // 使用 Node.js zlib 进行 deflate 压缩
         var zlib;
@@ -27,9 +26,9 @@
             throw new Error("Cannot load zlib module. PlantUML encoding requires Node.js zlib.");
         }
 
-        // 1. UTF-8 编码并 Deflate 压缩
+        // 1. UTF-8 编码并 Deflate 压缩（使用 deflate 而非 deflateRaw）
         var buffer = Buffer.from(text, "utf-8");
-        var compressed = zlib.deflateRawSync(buffer);
+        var compressed = zlib.deflateSync(buffer);
 
         console.log("[PlantUML Renderer] Compressed bytes:", compressed.length);
 
@@ -40,7 +39,11 @@
         }
         console.log("[PlantUML Renderer] First 10 bytes:", firstBytes.join(", "));
 
-        // 2. PlantUML 的自定义 base64 编码
+        // 2. PlantUML 的自定义 base64 编码（跳过 deflate header）
+        // deflate header 是前2字节 (如 120, 156)，最后4字节是 checksum
+        // PlantUML 期望的是原始 deflate 数据，不带 header
+        // 但我们可以用 ~1 前缀告诉服务器这是带 header 的 deflate
+
         var result = "";
         var len = compressed.length;
 
@@ -73,9 +76,9 @@
             return this.cache.get(cacheKey);
         }
 
-        // 编码并构建 URL
+        // 编码并构建 URL（使用 ~1 前缀表示 deflate 带 header）
         var encoded = this.encode(content);
-        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/" + encoded;
+        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/~1" + encoded;
 
         console.log("[PlantUML Renderer] Render URL:", url);
 
