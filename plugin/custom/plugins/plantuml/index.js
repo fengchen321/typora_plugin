@@ -1,4 +1,5 @@
 // plugin/custom/plugins/plantuml/index.js
+// 独立插件，不依赖 typora_plugin 项目
 
 const NamespaceManager = require("../core/namespace");
 const EventBus = require("../core/eventBus");
@@ -8,9 +9,9 @@ const PlantUMLDetector = require("./detector");
 const PlantUMLRenderer = require("./renderer");
 const PlantUMLUIController = require("./uiController");
 
-class PlantUMLPlugin extends BaseCustomPlugin {
-    constructor() {
-        super();
+class PlantUMLPlugin {
+    constructor(config = {}) {
+        this.config = { ...defaultConfig, ...config };
         this.configManager = null;
         this.detector = null;
         this.renderer = null;
@@ -19,10 +20,9 @@ class PlantUMLPlugin extends BaseCustomPlugin {
         this.debounceTimers = new Map();
     }
 
-    // Plugin configuration
-    selector = () => null; // Available everywhere
-
-    style = () => `
+    // 样式（内联 CSS）
+    style() {
+        return `
 /* Preview container */
 .tp_preview-container { margin: 16px 0; padding: 12px; background: var(--bg-color, #f8f9fa); border-radius: 8px; border: 1px solid var(--border-color, #e9ecef); position: relative; }
 .tp_preview-image { max-width: 100%; height: auto; display: block; margin: 0 auto; cursor: pointer; }
@@ -41,65 +41,95 @@ class PlantUMLPlugin extends BaseCustomPlugin {
 @media (prefers-color-scheme: dark) {
     .tp_preview-container { --bg-color: #2d2d2d; --border-color: #404040; --btn-bg: #3d3d3d; --btn-border: #505050; --btn-hover-bg: #4d4d4d; --text-color: #e0e0e0; --error-bg: #4d3d00; --error-border: #665200; --error-text: #ffd966; --retry-bg: #665200; --retry-hover-bg: #806600; --spinner-border: #404040; --spinner-accent: #4da6ff; }
 }`;
+    }
 
-    html = () => null;
+    // 提示文本
+    hint() {
+        return "Render PlantUML diagram";
+    }
 
-    hotkey = () => [this.config.hotkey];
-
-    hint = () => "Render PlantUML diagram";
-
-    // Lifecycle: Initialize
-    init = () => {
-        // Create config manager
+    // 生命周期：初始化前
+    async beforeProcess() {
+        // 创建配置管理器
         this.configManager = ConfigManager.create("plantuml_plugin_config", defaultConfig);
-
-        // Get merged config (default + user overrides)
         this.config = this.configManager.getAll();
+    }
 
-        // Initialize modules
+    // 生命周期：初始化
+    init() {
+        // 初始化模块
         this.detector = new PlantUMLDetector();
         this.renderer = new PlantUMLRenderer(this.config);
         this.ui = new PlantUMLUIController();
 
-        // Bind events
-        this._bindEvents();
-    };
+        // 注入样式
+        this._injectStyles();
 
-    // Lifecycle: Main processing
-    process = () => {
-        // Start detector if in auto mode
+        // 绑定事件
+        this._bindEvents();
+    }
+
+    // 生命周期：主处理
+    process() {
+        // 自动模式下启动检测器
         if (this.config.renderMode === "auto") {
             this.detector.start();
+            console.log("[PlantUML Plugin] Auto render mode enabled");
         }
-    };
+    }
 
-    // Callback: Manual trigger from menu/hotkey
-    callback = (anchorNode) => {
+    // 生命周期：清理
+    afterProcess() {
+        // 清理防抖定时器
+        this.debounceTimers.forEach(timer => clearTimeout(timer));
+        this.debounceTimers.clear();
+
+        // 停止检测器
+        if (this.detector) {
+            this.detector.stop();
+        }
+    }
+
+    // 手动触发回调
+    callback(anchorNode) {
+        if (!this.detector) {
+            console.warn("[PlantUML Plugin] Plugin not initialized");
+            return;
+        }
+
         const block = this.detector.findCurrentBlock();
         if (block) {
             this._renderBlock(block.id, block.content);
         } else {
-            this.utils.notification.show("No PlantUML code block found");
+            console.log("[PlantUML Plugin] No PlantUML code block found at cursor position");
         }
-    };
+    }
 
-    // Bind EventBus listeners
-    _bindEvents = () => {
-        // New block detected
+    // 注入样式
+    _injectStyles() {
+        const styleEl = document.createElement("style");
+        styleEl.id = "plantuml-plugin-styles";
+        styleEl.textContent = this.style();
+        document.head.appendChild(styleEl);
+    }
+
+    // 绑定 EventBus 事件
+    _bindEvents() {
+        // 新代码块检测
         EventBus.on("plantuml:block-detected", ({ blockId, content }) => {
             if (this.config.renderMode === "auto") {
                 this._renderBlockDebounced(blockId, content);
             }
         });
 
-        // Block content updated
+        // 代码块内容更新
         EventBus.on("plantuml:block-updated", ({ blockId, content }) => {
             if (this.config.renderMode === "auto") {
                 this._renderBlockDebounced(blockId, content);
             }
         });
 
-        // Manual refresh requested
+        // 手动刷新请求
         EventBus.on("plantuml:refresh-requested", ({ blockId }) => {
             const block = this.detector.getBlock(blockId);
             if (block) {
@@ -107,14 +137,14 @@ class PlantUMLPlugin extends BaseCustomPlugin {
             }
         });
 
-        // Exit edit mode
+        // 退出编辑模式
         EventBus.on("plantuml:exit-edit", ({ blockId }) => {
             this.detector.updateBlockContent(blockId);
         });
-    };
+    }
 
-    // Render a block
-    _renderBlock = async (blockId, content) => {
+    // 渲染代码块
+    async _renderBlock(blockId, content) {
         const block = this.detector.getBlock(blockId);
         if (!block) return;
 
@@ -129,30 +159,23 @@ class PlantUMLPlugin extends BaseCustomPlugin {
         } catch (error) {
             block.state = "error";
             this.ui.showError(blockId, error);
-            console.error(`PlantUML render error [${blockId}]:`, error);
+            console.error(`[PlantUML Plugin] Render error [${blockId}]:`, error);
         }
-    };
+    }
 
-    // Debounced render for real-time preview
-    _renderBlockDebounced = (blockId, content) => {
-        // Clear existing timer
+    // 防抖渲染
+    _renderBlockDebounced(blockId, content) {
+        // 清除现有定时器
         if (this.debounceTimers.has(blockId)) {
             clearTimeout(this.debounceTimers.get(blockId));
         }
 
-        // Set new timer
+        // 设置新定时器
         this.debounceTimers.set(blockId, setTimeout(() => {
             this._renderBlock(blockId, content);
             this.debounceTimers.delete(blockId);
         }, this.config.debounceDelay));
-    };
-
-    // Cleanup
-    afterProcess = () => {
-        // Clean up debounce timers
-        this.debounceTimers.forEach(timer => clearTimeout(timer));
-        this.debounceTimers.clear();
-    };
+    }
 }
 
 module.exports = { plugin: PlantUMLPlugin };
