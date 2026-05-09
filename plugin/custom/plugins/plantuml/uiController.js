@@ -22,7 +22,34 @@
     PlantUMLUIController.prototype.createPreview = function(blockId, originalElement, imageUrl) {
         var self = this;
 
-        // 创建容器
+        // 检查是否已有预览容器
+        var existingPreview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
+
+        if (existingPreview) {
+            // 更新现有容器的图片
+            var img = existingPreview.querySelector("." + this.ns.cls("preview-image"));
+            if (img) {
+                img.src = imageUrl;
+            } else {
+                // 创建新图片
+                img = document.createElement("img");
+                img.src = imageUrl;
+                img.className = this.ns.cls("preview-image");
+                img.alt = "PlantUML Diagram";
+
+                // 清空并重新填充
+                existingPreview.innerHTML = '';
+                existingPreview.appendChild(img);
+                existingPreview.appendChild(this._createToolbar(blockId));
+                this._bindEvents(existingPreview, blockId, originalElement);
+            }
+            existingPreview.setAttribute(this.ns.dataAttr("state"), "rendered");
+            existingPreview.style.display = "";
+            originalElement.style.display = "none";
+            return existingPreview;
+        }
+
+        // 创建新容器
         var container = document.createElement("div");
         container.className = this.ns.cls("preview-container");
         container.setAttribute(this.ns.dataAttr("block-id"), blockId);
@@ -164,10 +191,24 @@
 
     PlantUMLUIController.prototype.showLoading = function(blockId) {
         var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
-        if (!preview) return;
+        if (!preview) {
+            // 如果预览容器不存在，创建一个临时的 loading 容器
+            var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
+            if (!codeBlock) return;
+
+            preview = document.createElement("div");
+            preview.className = this.ns.cls("preview-container");
+            preview.setAttribute(this.ns.dataAttr("block-id"), blockId);
+            codeBlock.insertAdjacentElement("afterend", preview);
+        }
 
         preview.innerHTML = '<div class="' + this.ns.cls("loading") + '"></div>';
         preview.setAttribute(this.ns.dataAttr("state"), "loading");
+        preview.style.display = "";
+
+        // 隐藏代码块
+        var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
+        if (codeBlock) codeBlock.style.display = "none";
     };
 
     PlantUMLUIController.prototype.showError = function(blockId, error) {

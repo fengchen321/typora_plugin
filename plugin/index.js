@@ -212,7 +212,11 @@
         EventBus.on('plantuml:refresh-requested', function(data) {
             const block = detector.getBlock(data.blockId);
             if (block) {
-                renderBlock(detector, renderer, ui, data.blockId, block.content);
+                // 重新从 DOM 提取最新内容
+                const newContent = detector._extractContent(block.element);
+                block.content = newContent;
+                console.log("[PlantUML Plugin] Refresh requested, new content length:", newContent.length);
+                renderBlock(detector, renderer, ui, data.blockId, newContent);
             }
         });
 
