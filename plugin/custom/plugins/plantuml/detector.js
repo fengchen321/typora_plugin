@@ -114,6 +114,25 @@
 
         console.log("[PlantUML Detector] Registered block:", blockId, "content length:", content.length);
 
+        // 如果 CodeMirror 还没渲染完成，延迟重新提取和渲染
+        var cmContent = element.querySelector(".CodeMirror-code");
+        if (!cmContent) {
+            console.log("[PlantUML Detector] CodeMirror not ready, scheduling retry...");
+            var self = this;
+            setTimeout(function() {
+                var newContent = self._extractContent(element);
+                if (newContent !== content && newContent.length > content.length) {
+                    console.log("[PlantUML Detector] Retry extraction, new length:", newContent.length);
+                    var block = self.blocks.get(blockId);
+                    if (block) {
+                        block.content = newContent;
+                        EventBus.emit("plantuml:block-detected", { blockId: blockId, content: newContent });
+                    }
+                }
+            }, 500);
+            return;
+        }
+
         // 发送事件
         EventBus.emit("plantuml:block-detected", { blockId: blockId, content: content });
     };
@@ -141,8 +160,22 @@
             return result;
         }
 
-        // 备选方案：直接文本内容
+        // 备选方案：尝试从 innerHTML 解析行
         var codeElement = element.querySelector("code") || element;
+
+        // 方法1：通过 <br> 标签分割
+        var html = codeElement.innerHTML;
+        if (html && html.indexOf("<br") !== -1) {
+            console.log("[PlantUML Detector] Using <br> split method");
+            var tempDiv = document.createElement("div");
+            tempDiv.innerHTML = html;
+            var textContent = tempDiv.textContent || tempDiv.innerText || "";
+            textContent = textContent.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+            console.log("[PlantUML Detector] Fallback text content length:", textContent.length);
+            return textContent;
+        }
+
+        // 方法2：直接文本内容
         var textContent = codeElement.textContent || "";
         textContent = textContent.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
         console.log("[PlantUML Detector] Fallback text content length:", textContent.length);
