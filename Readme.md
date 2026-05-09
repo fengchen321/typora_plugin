@@ -17,92 +17,90 @@
 
 ### 前置要求
 
-此插件需要配合 Typora 插件注入机制使用。您需要：
+- Typora 版本 ≥ 0.9.98（最后一个免费版本）
+- Windows 或 Linux 平台
 
-1. Typora 版本 ≥ 0.9.98（最后一个免费版本）
-2. 修改 Typora 的 `window.html` 文件以注入插件脚本
+### 方式一：配合 typora_plugin 项目使用（推荐）
 
-### 步骤一：找到 window.html
+本项目插件设计为配合 [typora_plugin](https://github.com/obgnail/typora_plugin) 使用，该项目提供了完整的插件加载机制。
 
-根据您的 Typora 版本，`window.html` 位于不同位置：
+1. **安装 typora_plugin 基础设施**
 
-- **正式版 Typora**：`Typora安装目录/resources/window.html`
-- **免费版 Typora**：`Typora安装目录/resources/app/window.html`
+   按照 [typora_plugin 安装教程](https://github.com/obgnail/typora_plugin#如何使用windowslinux-platform) 完成基础安装。
 
-### 步骤二：复制插件文件
+2. **复制插件文件**
 
-将本项目 `plugin` 目录复制到包含 `window.html` 的文件夹下：
+   将本项目 `plugin/custom/plugins/` 目录内容复制到 Typora 插件目录：
 
-```
-Typora安装目录/resources/
-├── window.html          (或 app/window.html)
-└── plugin/
-    ├── custom/
-    │   └── plugins/
-    │       ├── core/
-    │       │   ├── namespace.js
-    │       │   ├── eventBus.js
-    │       │   └── configManager.js
-    │       └── plantuml/
-    │           ├── index.js
-    │           ├── detector.js
-    │           ├── renderer.js
-    │           ├── uiController.js
-    │           └── config.js
-    │           └── README.md
-    └── global/
-        └── settings/
-            └── custom_plugin.user.toml  (需手动创建)
-```
+   ```
+   # 源目录
+   plugin/custom/plugins/
+   ├── core/
+   │   ├── namespace.js
+   │   ├── eventBus.js
+   │   └── configManager.js
+   └── plantuml/
+       ├── index.js
+       ├── detector.js
+       ├── renderer.js
+       ├── uiController.js
+       └── config.js
 
-### 步骤三：修改 window.html
+   # 目标目录（Typora安装目录/resources/plugin/custom/plugins/）
+   ```
 
-在 `window.html` 中添加插件脚本引用：
+3. **添加配置**
 
-```html
-<!-- 在原有脚本标签后添加 -->
-<script src="./plugin/custom/plugins/core/loader.js" defer></script>
-<script src="./plugin/custom/plugins/plantuml/index.js" defer></script>
-```
+   在 `plugin/global/settings/custom_plugin.user.toml` 中添加：
 
-或者创建统一的入口脚本 `plugin/index.js`：
+   ```toml
+   [plantuml]
+   name = "PlantUML"
+   enable = true
+   hide = false
+   order = 1
+   hotkey = "ctrl+shift+u"
+   renderMode = "auto"
+   serverUrl = "http://www.plantuml.com/plantuml"
+   outputFormat = "svg"
+   timeout = 10000
+   cacheLimit = 20
+   debounceDelay = 500
+   ```
 
-```javascript
-window.addEventListener("load", () => {
-    // 初始化核心模块
-    const NamespaceManager = require("./custom/plugins/core/namespace");
-    const EventBus = require("./custom/plugins/core/eventBus");
-    global.NamespaceManager = NamespaceManager;
-    global.EventBus = EventBus;
-    
-    // 加载插件
-    const PlantUMLPlugin = require("./custom/plugins/plantuml/index");
-    // ... 插件初始化逻辑
-});
-```
+4. **重启 Typora**
 
-### 步骤四：创建配置文件
+### 方式二：独立使用
 
-在 `plugin/global/settings/custom_plugin.user.toml` 中添加：
+如需独立使用，需要自行实现插件加载机制：
 
-```toml
-[plantuml]
-name = "PlantUML"
-enable = true
-hide = false
-order = 1
-hotkey = "ctrl+shift+u"
-renderMode = "auto"
-serverUrl = "http://www.plantuml.com/plantuml"
-outputFormat = "svg"
-timeout = 10000
-cacheLimit = 20
-debounceDelay = 500
-```
+1. **找到 window.html**
 
-### 步骤五：重启 Typora
+   - 正式版 Typora：`Typora安装目录/resources/window.html`
+   - 免费版 Typora：`Typora安装目录/resources/app/window.html`
 
-重启 Typora 后，插件将自动生效。
+2. **复制插件文件**
+
+   将 `plugin` 目录复制到包含 `window.html` 的文件夹下。
+
+3. **修改 window.html 注入脚本**
+
+   在 `window.html` 的 `</body>` 标签前添加：
+
+   ```html
+   <script src="./plugin/index.js" defer="defer"></script>
+   ```
+
+4. **创建插件入口脚本**
+
+   创建 `plugin/index.js`，实现插件加载逻辑。需要：
+   - 提供 `BaseCustomPlugin` 基类
+   - 实现配置读取
+   - 加载并初始化插件模块
+
+   **注意**：本项目插件的 `index.js` 继承自 `BaseCustomPlugin`，需要您自行提供此基类或修改代码结构。
+
+5. **重启 Typora**
 
 ## 使用方法
 
@@ -210,8 +208,7 @@ plugin/
 │           ├── detector.js        # 代码块检测（MutationObserver）
 │           ├── renderer.js        # 渲染引擎（编码 + 缓存）
 │           ├── uiController.js    # UI 交互（显示/编辑切换）
-│           ├── config.js          # 默认配置
-│           └── README.md          # 插件文档
+│           └── config.js          # 默认配置
 │
 └── global/
     └── settings/
