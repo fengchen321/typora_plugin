@@ -29,12 +29,7 @@
 
         console.log("[PlantUML Detector] Starting, editor found:", editor);
 
-        // 初始扫描（延迟执行，等待 Typora 渲染完成）
-        setTimeout(function() {
-            self._scanExistingBlocks();
-        }, 500);
-
-        // 启动观察器
+        // 先启动观察器
         this.observer = new MutationObserver(function(mutations) {
             self._handleMutations(mutations);
         });
@@ -47,6 +42,12 @@
         });
 
         console.log("[PlantUML Detector] Observer started");
+
+        // 延迟扫描现有代码块（等待 CodeMirror 渲染完成）
+        setTimeout(function() {
+            console.log("[PlantUML Detector] Running delayed scan...");
+            self._scanExistingBlocks();
+        }, 1000);
     };
 
     PlantUMLDetector.prototype.stop = function() {
