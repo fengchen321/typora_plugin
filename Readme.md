@@ -15,50 +15,94 @@
 
 ## 安装方法
 
-### 方式一：使用现有 typora_plugin 项目
+### 前置要求
 
-如果您已安装 [typora_plugin](https://github.com/obgnail/typora_plugin) 项目：
+此插件需要配合 Typora 插件注入机制使用。您需要：
 
-1. 将 `plugin/custom/plugins/` 目录下的内容复制到 Typora 插件目录的对应位置：
-   ```
-   Typora安装目录/resources/plugin/custom/plugins/
-   ├── core/
-   │   ├── namespace.js
-   │   ├── eventBus.js
-   │   └── configManager.js
-   └── plantuml/
-       ├── index.js
-       ├── detector.js
-       ├── renderer.js
-       ├── uiController.js
-       ├── config.js
-       └── README.md
-   ```
+1. Typora 版本 ≥ 0.9.98（最后一个免费版本）
+2. 修改 Typora 的 `window.html` 文件以注入插件脚本
 
-2. 在 `plugin/global/settings/custom_plugin.user.toml` 中添加配置：
-   ```toml
-   [plantuml]
-   name = "PlantUML"
-   enable = true
-   hide = false
-   order = 1
-   hotkey = "ctrl+shift+u"
-   renderMode = "auto"
-   serverUrl = "http://www.plantuml.com/plantuml"
-   outputFormat = "svg"
-   timeout = 10000
-   cacheLimit = 20
-   debounceDelay = 500
-   ```
+### 步骤一：找到 window.html
 
-3. 重启 Typora
+根据您的 Typora 版本，`window.html` 位于不同位置：
 
-### 方式二：独立安装（需要 typora_plugin 基础）
+- **正式版 Typora**：`Typora安装目录/resources/window.html`
+- **免费版 Typora**：`Typora安装目录/resources/app/window.html`
 
-此插件依赖 `typora_plugin` 项目提供的 `BaseCustomPlugin` 基类和插件加载机制。
+### 步骤二：复制插件文件
 
-1. 首先按照 [typora_plugin 安装教程](https://github.com/obgnail/typora_plugin#如何使用windowslinux-platform) 安装基础插件系统
-2. 然后按照方式一的步骤添加 PlantUML 插件
+将本项目 `plugin` 目录复制到包含 `window.html` 的文件夹下：
+
+```
+Typora安装目录/resources/
+├── window.html          (或 app/window.html)
+└── plugin/
+    ├── custom/
+    │   └── plugins/
+    │       ├── core/
+    │       │   ├── namespace.js
+    │       │   ├── eventBus.js
+    │       │   └── configManager.js
+    │       └── plantuml/
+    │           ├── index.js
+    │           ├── detector.js
+    │           ├── renderer.js
+    │           ├── uiController.js
+    │           └── config.js
+    │           └── README.md
+    └── global/
+        └── settings/
+            └── custom_plugin.user.toml  (需手动创建)
+```
+
+### 步骤三：修改 window.html
+
+在 `window.html` 中添加插件脚本引用：
+
+```html
+<!-- 在原有脚本标签后添加 -->
+<script src="./plugin/custom/plugins/core/loader.js" defer></script>
+<script src="./plugin/custom/plugins/plantuml/index.js" defer></script>
+```
+
+或者创建统一的入口脚本 `plugin/index.js`：
+
+```javascript
+window.addEventListener("load", () => {
+    // 初始化核心模块
+    const NamespaceManager = require("./custom/plugins/core/namespace");
+    const EventBus = require("./custom/plugins/core/eventBus");
+    global.NamespaceManager = NamespaceManager;
+    global.EventBus = EventBus;
+    
+    // 加载插件
+    const PlantUMLPlugin = require("./custom/plugins/plantuml/index");
+    // ... 插件初始化逻辑
+});
+```
+
+### 步骤四：创建配置文件
+
+在 `plugin/global/settings/custom_plugin.user.toml` 中添加：
+
+```toml
+[plantuml]
+name = "PlantUML"
+enable = true
+hide = false
+order = 1
+hotkey = "ctrl+shift+u"
+renderMode = "auto"
+serverUrl = "http://www.plantuml.com/plantuml"
+outputFormat = "svg"
+timeout = 10000
+cacheLimit = 20
+debounceDelay = 500
+```
+
+### 步骤五：重启 Typora
+
+重启 Typora 后，插件将自动生效。
 
 ## 使用方法
 
@@ -85,10 +129,6 @@ Bob -> Alice: Hi!
 ### 手动渲染
 
 当 `renderMode = "manual"` 时，使用快捷键 `Ctrl+Shift+U` 手动触发渲染。
-
-### 右键菜单
-
-右键点击编辑器 → 常用插件 → 二级插件 → PlantUML
 
 ## 配置选项
 
@@ -157,21 +197,25 @@ serverUrl = "http://localhost:8080"
 ## 文件结构
 
 ```
-plugin/custom/plugins/
-├── core/                          # 核心基础设施（可复用）
-│   ├── namespace.js               # CSS 命名空间管理
-│   ├── eventBus.js                # 插件间事件通信
-│   └── configManager.js           # localStorage 配置管理
+plugin/
+├── custom/
+│   └── plugins/
+│       ├── core/                  # 核心基础设施（可复用）
+│       │   ├── namespace.js       # CSS 命名空间管理
+│       │   ├── eventBus.js        # 插件间事件通信
+│       │   └── configManager.js   # localStorage 配置管理
+│       │
+│       └── plantuml/              # PlantUML 插件
+│           ├── index.js           # 插件入口（生命周期）
+│           ├── detector.js        # 代码块检测（MutationObserver）
+│           ├── renderer.js        # 渲染引擎（编码 + 缓存）
+│           ├── uiController.js    # UI 交互（显示/编辑切换）
+│           ├── config.js          # 默认配置
+│           └── README.md          # 插件文档
 │
-├── plantuml/                      # PlantUML 插件
-│   ├── index.js                   # 插件入口（生命周期）
-│   ├── detector.js                # 代码块检测（MutationObserver）
-│   ├── renderer.js                # 渲染引擎（编码 + 缓存）
-│   ├── uiController.js            # UI 交互（显示/编辑切换）
-│   ├── config.js                  # 默认配置
-│   └── README.md                  # 插件文档
-│
-└── (其他插件可复用 core 模块)
+└── global/
+    └── settings/
+        └── custom_plugin.user.toml  # 用户配置
 ```
 
 ## 扩展开发
@@ -216,5 +260,4 @@ MIT License
 ## 参考
 
 - [PlantUML 官方网站](https://plantuml.com/)
-- [typora_plugin 项目](https://github.com/obgnail/typora_plugin)
 - [PlantUML Server Docker](https://hub.docker.com/r/plantuml/plantuml-server)
