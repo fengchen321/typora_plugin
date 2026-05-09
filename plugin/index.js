@@ -222,13 +222,18 @@
 
         // 退出编辑模式
         EventBus.on('plantuml:exit-edit', function(data) {
+            console.log("[PlantUML Plugin] Exit edit event received for:", data.blockId);
             const block = detector.getBlock(data.blockId);
             if (block) {
                 // 重新从 DOM 提取最新内容
                 const newContent = detector._extractContent(block.element);
                 block.content = newContent;
                 console.log("[PlantUML Plugin] Exit edit mode, content length:", newContent.length);
-                // 重新渲染
+
+                // 先显示 loading（会隐藏代码块）
+                ui.showLoading(data.blockId);
+
+                // 然后重新渲染
                 renderBlock(detector, renderer, ui, data.blockId, newContent);
             }
         });

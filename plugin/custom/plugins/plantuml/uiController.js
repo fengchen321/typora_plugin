@@ -148,8 +148,18 @@
         // 移除之前的处理器
         if (this.exitHandler) {
             document.removeEventListener("click", this.exitHandler);
+            document.removeEventListener("keydown", this.keydownHandler);
         }
 
+        // ESC 键退出编辑模式
+        this.keydownHandler = function(e) {
+            if (e.key === "Escape") {
+                console.log("[PlantUML UIController] ESC key detected, exiting edit mode");
+                self.exitEditMode(blockId);
+            }
+        };
+
+        // 点击外部退出编辑模式
         this.exitHandler = function(e) {
             var block = document.querySelector("[" + self.ns.dataAttr("block-id") + '="' + blockId + '"]');
             if (!block) return;
@@ -169,6 +179,7 @@
         // 延迟添加以避免立即触发
         setTimeout(function() {
             document.addEventListener("click", self.exitHandler);
+            document.addEventListener("keydown", self.keydownHandler);
         }, 100);
     };
 
@@ -179,8 +190,16 @@
             document.removeEventListener("click", this.exitHandler);
             this.exitHandler = null;
         }
+        if (this.keydownHandler) {
+            document.removeEventListener("keydown", this.keydownHandler);
+            this.keydownHandler = null;
+        }
 
         // 请求更新
+        EventBus.emit("plantuml:exit-edit", { blockId: blockId });
+
+        this.activeBlockId = null;
+    };
         EventBus.emit("plantuml:exit-edit", { blockId: blockId });
 
         this.activeBlockId = null;
