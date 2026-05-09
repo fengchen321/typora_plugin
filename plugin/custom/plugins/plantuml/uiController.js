@@ -17,6 +17,8 @@
         this.ns = NamespaceManager;
         this.activeBlockId = null;
         this.exitHandler = null;
+        this.keydownHandler = null;
+        this.blurHandler = null;
     }
 
     PlantUMLUIController.prototype.createPreview = function(blockId, originalElement, imageUrl) {
@@ -112,11 +114,6 @@
             e.preventDefault();
             self.enterEditMode(blockId);
         });
-
-        // 单击放大（可选的 future feature）
-        img.addEventListener("click", function(e) {
-            // 预留给放大功能
-        });
     };
 
     PlantUMLUIController.prototype.enterEditMode = function(blockId) {
@@ -124,17 +121,16 @@
         var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
         var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
 
-        console.log("[PlantUML UIController] Preview element:", preview);
-        console.log("[PlantUML UIController] CodeBlock element:", codeBlock);
-
-        if (!preview || !codeBlock) return;
+        if (!preview || !codeBlock) {
+            console.log("[PlantUML UIController] Preview or codeBlock not found");
+            return;
+        }
 
         // 隐藏预览
         preview.style.display = "none";
 
-        // 显示代码块并聚焦
+        // 显示代码块
         codeBlock.style.display = "";
-        codeBlock.focus();
 
         this.activeBlockId = blockId;
 
@@ -146,31 +142,26 @@
         var self = this;
 
         // 移除之前的处理器
-        if (this.exitHandler) {
-            document.removeEventListener("click", this.exitHandler);
-            document.removeEventListener("keydown", this.keydownHandler);
-        }
+        this._removeExitHandlers();
 
-        // ESC 键退出编辑模式
+        // Ctrl+Enter 退出编辑模式并渲染
         this.keydownHandler = function(e) {
-            if (e.key === "Escape") {
-                console.log("[PlantUML UIController] ESC key detected, exiting edit mode");
+            if (e.ctrlKey && e.key === "Enter") {
+                console.log("[PlantUML UIController] Ctrl+Enter detected, exiting edit mode");
+                e.preventDefault();
                 self.exitEditMode(blockId);
             }
         };
 
         // 点击外部退出编辑模式
         this.exitHandler = function(e) {
-            var block = document.querySelector("[" + self.ns.dataAttr("block-id") + '="' + blockId + '"]');
-            if (!block) return;
-
             var preview = document.querySelector("[" + self.ns.dataAttr("block-id") + '="' + blockId + '"].' + self.ns.cls("preview-container"));
             var codeBlock = document.querySelector("pre[" + self.ns.dataAttr("block-id") + '="' + blockId + '"]');
 
+            if (!preview || !codeBlock) return;
+
             // 检查点击是否在预览和代码块之外
-            if (preview && codeBlock &&
-                !preview.contains(e.target) &&
-                !codeBlock.contains(e.target)) {
+            if (!preview.contains(e.target) && !codeBlock.contains(e.target)) {
                 console.log("[PlantUML UIController] Click outside detected, exiting edit mode");
                 self.exitEditMode(blockId);
             }
@@ -183,9 +174,7 @@
         }, 100);
     };
 
-    PlantUMLUIController.prototype.exitEditMode = function(blockId) {
-        console.log("[PlantUML UIController] Exiting edit mode for:", blockId);
-        // 移除退出处理器
+    PlantUMLUIController.prototype._removeExitHandlers = function() {
         if (this.exitHandler) {
             document.removeEventListener("click", this.exitHandler);
             this.exitHandler = null;
@@ -194,12 +183,15 @@
             document.removeEventListener("keydown", this.keydownHandler);
             this.keydownHandler = null;
         }
-
-        // 请求更新
-        EventBus.emit("plantuml:exit-edit", { blockId: blockId });
-
-        this.activeBlockId = null;
     };
+
+    PlantUMLUIController.prototype.exitEditMode = function(blockId) {
+        console.log("[PlantUML UIController] Exiting edit mode for:", blockId);
+
+        // 移除退出处理器
+        this._removeExitHandlers();
+
+        // 请求更新并渲染
         EventBus.emit("plantuml:exit-edit", { blockId: blockId });
 
         this.activeBlockId = null;
