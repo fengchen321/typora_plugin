@@ -261,3 +261,4 @@ MIT License
 
 - [PlantUML 官方网站](https://plantuml.com/)
 - [PlantUML Server Docker](https://hub.docker.com/r/plantuml/plantuml-server)
+- [typora_plugin 项目](https://github.com/obgnail/typora_plugin) - 参考 Typora 插件架构设计
