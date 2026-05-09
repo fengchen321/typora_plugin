@@ -13,6 +13,9 @@
     }
 
     PlantUMLRenderer.prototype.encode = function(text) {
+        console.log("[PlantUML Renderer] Encoding text, length:", text.length);
+        console.log("[PlantUML Renderer] Text content:", text);
+
         // 使用 Node.js zlib 进行 deflate 压缩
         var zlib;
         var reqnode = global.reqnode || global.require;
@@ -24,11 +27,15 @@
             throw new Error("Cannot load zlib module. PlantUML encoding requires Node.js zlib.");
         }
 
-        // 1. Deflate 压缩
-        var compressed = zlib.deflateRawSync(Buffer.from(text, "utf-8"));
+        // 1. UTF-8 编码并 Deflate 压缩（使用 deflate 而非 deflateRaw）
+        var buffer = Buffer.from(text, "utf-8");
+        var compressed = zlib.deflateSync(buffer);
+
+        console.log("[PlantUML Renderer] Compressed length:", compressed.length);
 
         // 2. 转换为标准 base64
         var base64 = compressed.toString("base64");
+        console.log("[PlantUML Renderer] Base64 length:", base64.length);
 
         // 3. 映射到 PlantUML 自定义字符集
         var result = "";
@@ -45,10 +52,15 @@
                 result += "-";
             } else if (c === "/") {
                 result += "_";
+            } else if (c === "=") {
+                // PlantUML 不需要 padding
+                continue;
             } else {
-                result += c; // '=' 保持不变
+                result += c;
             }
         }
+
+        console.log("[PlantUML Renderer] Encoded result:", result);
         return result;
     };
 
