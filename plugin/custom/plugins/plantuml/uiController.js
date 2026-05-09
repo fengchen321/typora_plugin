@@ -120,8 +120,12 @@
     };
 
     PlantUMLUIController.prototype.enterEditMode = function(blockId) {
+        console.log("[PlantUML UIController] Entering edit mode for:", blockId);
         var preview = document.querySelector("[" + this.ns.dataAttr("block-id") + '="' + blockId + '"].' + this.ns.cls("preview-container"));
         var codeBlock = document.querySelector("pre[" + this.ns.dataAttr("block-id") + '="' + blockId + '"]');
+
+        console.log("[PlantUML UIController] Preview element:", preview);
+        console.log("[PlantUML UIController] CodeBlock element:", codeBlock);
 
         if (!preview || !codeBlock) return;
 
@@ -157,7 +161,7 @@
             if (preview && codeBlock &&
                 !preview.contains(e.target) &&
                 !codeBlock.contains(e.target)) {
-
+                console.log("[PlantUML UIController] Click outside detected, exiting edit mode");
                 self.exitEditMode(blockId);
             }
         };
@@ -169,6 +173,7 @@
     };
 
     PlantUMLUIController.prototype.exitEditMode = function(blockId) {
+        console.log("[PlantUML UIController] Exiting edit mode for:", blockId);
         // 移除退出处理器
         if (this.exitHandler) {
             document.removeEventListener("click", this.exitHandler);
