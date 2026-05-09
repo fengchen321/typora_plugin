@@ -43,7 +43,7 @@
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ["class", "data-lang"]
+            attributeFilter: ["class", "lang"]
         });
 
         console.log("[PlantUML Detector] Observer started");
@@ -59,7 +59,8 @@
 
     PlantUMLDetector.prototype._scanExistingBlocks = function() {
         var self = this;
-        var blocks = document.querySelectorAll('pre.md-fences[data-lang="plantuml"]');
+        // Typora 使用 lang="plantuml" 而不是 data-lang="plantuml"
+        var blocks = document.querySelectorAll('pre.md-fences[lang="plantuml"]');
         console.log("[PlantUML Detector] Scanning, found blocks:", blocks.length);
         blocks.forEach(function(block) {
             self._registerBlock(block);
@@ -84,9 +85,9 @@
 
         var blocks;
         if (node.querySelectorAll) {
-            blocks = node.querySelectorAll('pre.md-fences[data-lang="plantuml"]');
+            blocks = node.querySelectorAll('pre.md-fences[lang="plantuml"]');
         }
-        if (!blocks && node.matches && node.matches('pre.md-fences[data-lang="plantuml"]')) {
+        if (!blocks && node.matches && node.matches('pre.md-fences[lang="plantuml"]')) {
             blocks = [node];
         }
 
