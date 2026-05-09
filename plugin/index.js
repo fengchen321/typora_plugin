@@ -102,23 +102,72 @@
     }
 
     function getPluginDir(path) {
-        // 尝试多种方式获取插件目录
-        // 方式1: 通过 __dirname (Node.js)
-        if (typeof __dirname !== 'undefined') {
-            // 假设 index.js 在 plugin 目录下
-            return __dirname;
+        // Typora 插件目录结构:
+        // Windows: %APPDATA%/Typora/plugins/ 或 Typora/resources/plugins/
+        // macOS: ~/Library/Application Support/Typora/plugins/
+        // Linux: ~/.config/Typora/plugins/
+
+        const fs = _require('fs');
+
+        // 方式1: 检查 Typora 用户数据目录
+        const process = _require('process');
+        const os = _require('os');
+
+        let candidatePaths = [];
+
+        // Windows
+        if (process.platform === 'win32') {
+            candidatePaths = [
+                path.join(process.env.APPDATA || '', 'Typora', 'plugins'),
+                path.join(process.env.LOCALAPPDATA || '', 'Typora', 'plugins'),
+            ];
+        }
+        // macOS
+        else if (process.platform === 'darwin') {
+            candidatePaths = [
+                path.join(os.homedir(), 'Library', 'Application Support', 'Typora', 'plugins'),
+            ];
+        }
+        // Linux
+        else {
+            candidatePaths = [
+                path.join(os.homedir(), '.config', 'Typora', 'plugins'),
+            ];
         }
 
-        // 方式2: 通过 script 标签
+        // 添加 Typora 安装目录下的 plugins
+        // __dirname 在 Typora 中指向 electron.asar/renderer
+        if (typeof __dirname !== 'undefined') {
+            // 从 electron.asar/renderer 向上找到 resources 目录
+            const resourcesDir = path.dirname(path.dirname(__dirname));
+            candidatePaths.push(path.join(resourcesDir, 'plugins'));
+        }
+
+        // 查找存在的插件目录
+        for (const pluginPath of candidatePaths) {
+            try {
+                if (fs.existsSync(pluginPath)) {
+                    const indexPath = path.join(pluginPath, 'index.js');
+                    if (fs.existsSync(indexPath)) {
+                        return pluginPath;
+                    }
+                }
+            } catch (e) {
+                // 忽略权限错误，继续尝试下一个路径
+            }
+        }
+
+        // 方式2: 通过 script 标签的 src 解析
         const scripts = document.querySelectorAll('script[src*="plugin/index.js"]');
         if (scripts.length > 0) {
             const src = scripts[0].src;
-            // 移除 plugin/index.js 部分
-            return src.replace(/\/plugin\/index\.js$/, '/plugin');
+            // file:// 协议
+            if (src.startsWith('file://')) {
+                const filePath = decodeURIComponent(src.replace(/^file:\/\//, ''));
+                return path.dirname(filePath);
+            }
         }
 
-        // 方式3: 假设在 Typora resources 目录
-        // 尝试查找 window.html 所在位置
         return null;
     }
 
