@@ -32,17 +32,19 @@
         var compressed = zlib.deflateRawSync(buffer);
 
         console.log("[PlantUML Renderer] Compressed bytes:", compressed.length);
+        console.log("[PlantUML Renderer] First 10 bytes:", Array.prototype.slice.call(compressed, 0, 10));
 
         // 2. PlantUML 的自定义 base64 编码
-        // 每3个字节转换为4个字符
+        // 确保我们处理的是 Uint8Array
+        var bytes = new Uint8Array(compressed);
         var result = "";
-        var len = compressed.length;
+        var len = bytes.length;
         var i = 0;
 
         while (i < len) {
-            var b1 = compressed[i++];
-            var b2 = (i < len) ? compressed[i++] : 0;
-            var b3 = (i < len) ? compressed[i++] : 0;
+            var b1 = bytes[i++];
+            var b2 = (i < len) ? bytes[i++] : 0;
+            var b3 = (i < len) ? bytes[i++] : 0;
 
             // 6位一组，映射到 PlantUML 字符集
             var c1 = (b1 >> 2) & 0x3F;
