@@ -75,7 +75,10 @@
 
         // 编码并构建 URL
         var encoded = this.encode(content);
-        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/" + encoded;
+        // 添加 ~1 前缀表示使用 deflate 压缩
+        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/~1" + encoded;
+
+        console.log("[PlantUML Renderer] Render URL:", url);
 
         // 预加载图片以验证其有效
         await this._loadImage(url);
