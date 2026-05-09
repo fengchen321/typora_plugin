@@ -27,37 +27,32 @@
             throw new Error("Cannot load zlib module. PlantUML encoding requires Node.js zlib.");
         }
 
-        // 1. UTF-8 编码并 Deflate 压缩（使用 deflate 而非 deflateRaw）
+        // 1. UTF-8 编码并 Deflate 压缩
         var buffer = Buffer.from(text, "utf-8");
-        var compressed = zlib.deflateSync(buffer);
+        var compressed = zlib.deflateRawSync(buffer);
 
-        console.log("[PlantUML Renderer] Compressed length:", compressed.length);
+        console.log("[PlantUML Renderer] Compressed bytes:", compressed.length);
 
-        // 2. 转换为标准 base64
-        var base64 = compressed.toString("base64");
-        console.log("[PlantUML Renderer] Base64 length:", base64.length);
-
-        // 3. 映射到 PlantUML 自定义字符集
+        // 2. PlantUML 的自定义 base64 编码
+        // 每3个字节转换为4个字符
         var result = "";
-        for (var i = 0; i < base64.length; i++) {
-            var c = base64[i];
-            var code = c.charCodeAt(0);
-            if (c >= "A" && c <= "Z") {
-                result += UML_CHARS[code - 65 + 10];
-            } else if (c >= "a" && c <= "z") {
-                result += UML_CHARS[code - 97 + 36];
-            } else if (c >= "0" && c <= "9") {
-                result += UML_CHARS[code - 48];
-            } else if (c === "+") {
-                result += "-";
-            } else if (c === "/") {
-                result += "_";
-            } else if (c === "=") {
-                // PlantUML 不需要 padding
-                continue;
-            } else {
-                result += c;
-            }
+        var len = compressed.length;
+        var i = 0;
+
+        while (i < len) {
+            var b1 = compressed[i++];
+            var b2 = (i < len) ? compressed[i++] : 0;
+            var b3 = (i < len) ? compressed[i++] : 0;
+
+            // 6位一组，映射到 PlantUML 字符集
+            var c1 = (b1 >> 2) & 0x3F;
+            var c2 = ((b1 & 0x03) << 4) | ((b2 >> 4) & 0x0F);
+            var c3 = ((b2 & 0x0F) << 2) | ((b3 >> 6) & 0x03);
+            var c4 = b3 & 0x3F;
+
+            result += UML_CHARS[c1] + UML_CHARS[c2];
+            if (i - 2 < len) result += UML_CHARS[c3];
+            if (i - 1 < len) result += UML_CHARS[c4];
         }
 
         console.log("[PlantUML Renderer] Encoded result:", result);
@@ -73,10 +68,9 @@
             return this.cache.get(cacheKey);
         }
 
-        // 编码并构建 URL
+        // 编码并构建 URL（不需要前缀）
         var encoded = this.encode(content);
-        // 添加 ~1 前缀表示使用 deflate 压缩
-        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/~1" + encoded;
+        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/" + encoded;
 
         console.log("[PlantUML Renderer] Render URL:", url);
 
