@@ -118,20 +118,31 @@
     };
 
     PlantUMLDetector.prototype._extractContent = function(element) {
+        console.log("[PlantUML Detector] Extracting content from element:", element);
+
         // Typora 使用 CodeMirror 来渲染代码块
         var cmContent = element.querySelector(".CodeMirror-code");
+        console.log("[PlantUML Detector] CodeMirror-code element:", cmContent);
+
         if (cmContent) {
             var lines = cmContent.querySelectorAll(".CodeMirror-line");
+            console.log("[PlantUML Detector] Found CodeMirror lines:", lines.length);
             var contents = [];
             for (var i = 0; i < lines.length; i++) {
-                contents.push(lines[i].textContent);
+                var lineText = lines[i].textContent;
+                console.log("[PlantUML Detector] Line", i, ":", lineText.substring(0, 50));
+                contents.push(lineText);
             }
-            return contents.join("\n");
+            var result = contents.join("\n");
+            console.log("[PlantUML Detector] Extracted content length:", result.length);
+            return result;
         }
 
         // 备选方案：直接文本内容
         var codeElement = element.querySelector("code") || element;
-        return codeElement.textContent || "";
+        var textContent = codeElement.textContent || "";
+        console.log("[PlantUML Detector] Fallback text content length:", textContent.length);
+        return textContent;
     };
 
     PlantUMLDetector.prototype._generateId = function() {
