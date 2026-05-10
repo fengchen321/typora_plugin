@@ -26,6 +26,8 @@ Alice -> Bob: Hello
 | renderMode | auto | "auto" or "manual" |
 | outputFormat | svg | "svg" or "png" |
 | timeout | 10000 | Request timeout (ms) |
+| enableFenceAutocomplete | true | Show `plantuml` suggestion when typing fenced code language |
+| fenceAutocompleteMinChars | 3 | Minimum typed characters after ` ``` ` before showing the suggestion |
 
 ## Self-hosted Server
 
@@ -46,3 +48,8 @@ Then set `serverUrl = "http://localhost:8080"`
 
 - Double-click rendered image to edit source
 - Click outside editing area to re-render
+
+## Fence Autocomplete
+
+- Type ``````` + `pla...` at the end of a line
+- Press `Tab` or `Enter` on the suggestion to complete to ` ```plantuml`

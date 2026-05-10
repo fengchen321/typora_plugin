@@ -27,3 +27,9 @@ cacheLimit = 20
 
 # Debounce delay for auto mode (ms)
 debounceDelay = 500
+
+# Show autocomplete suggestion for ```plantuml fences
+enableFenceAutocomplete = true
+
+# Show suggestion only after typing at least this many characters, e.g. ```pla
+fenceAutocompleteMinChars = 3

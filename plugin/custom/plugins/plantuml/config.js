@@ -25,6 +25,12 @@
 
         // Hotkey for manual render (Ctrl+Shift+U)
         hotkey: "ctrl+shift+u",
+
+        // Enable fenced code autocomplete for ```plantuml
+        enableFenceAutocomplete: true,
+
+        // Minimum typed characters after ``` before showing PlantUML suggestion
+        fenceAutocompleteMinChars: 3,
     };
 
     // UMD 导出

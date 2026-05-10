@@ -64,11 +64,13 @@
             const Detector = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/detector.js'));
             const Renderer = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/renderer.js'));
             const UIController = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/uiController.js'));
+            const Autocomplete = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/autocomplete.js'));
 
             // 创建插件实例
             const detector = new Detector();
             const renderer = new Renderer(config);
             const ui = new UIController();
+            const autocomplete = new Autocomplete(config);
 
             // 注入样式
             injectStyles(getStyles());
@@ -81,6 +83,9 @@
                 detector.start();
             }
 
+            // 启动 fenced code 自动补全
+            autocomplete.start();
+
             // 注册快捷键
             registerHotkey(detector, renderer, config);
 
@@ -89,6 +94,7 @@
                 detector,
                 renderer,
                 ui,
+                autocomplete,
                 config,
                 configManager
             };
@@ -187,9 +193,14 @@
 .tp_retry-btn:hover { background: var(--retry-hover-bg, #e0a800); }
 .tp_loading { display: flex; align-items: center; justify-content: center; padding: 32px; min-height: 100px; }
 .tp_loading::after { content: ""; width: 32px; height: 32px; border: 3px solid var(--spinner-border, #e9ecef); border-top-color: var(--spinner-accent, #007bff); border-radius: 50%; animation: tp_spin 1s linear infinite; }
+.tp_autocomplete-popup { position: absolute; z-index: 9999; min-width: 180px; padding: 6px; background: var(--menu-bg, #ffffff); border: 1px solid var(--menu-border, #d0d7de); border-radius: 10px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18); }
+.tp_autocomplete-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 10px; background: transparent; border: none; border-radius: 8px; cursor: pointer; text-align: left; font: inherit; color: var(--menu-text, #1f2328); }
+.tp_autocomplete-item:hover { background: var(--menu-hover, #f3f4f6); }
+.tp_autocomplete-text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tp_autocomplete-hint { font-size: 12px; color: var(--menu-muted, #6b7280); }
 @keyframes tp_spin { to { transform: rotate(360deg); } }
 @media (prefers-color-scheme: dark) {
-    .tp_preview-container { --bg-color: #2d2d2d; --border-color: #404040; --btn-bg: #3d3d3d; --btn-border: #505050; --btn-hover-bg: #4d4d4d; --text-color: #e0e0e0; --error-bg: #4d3d00; --error-border: #665200; --error-text: #ffd966; --retry-bg: #665200; --retry-hover-bg: #806600; --spinner-border: #404040; --spinner-accent: #4da6ff; }
+    .tp_preview-container { --bg-color: #2d2d2d; --border-color: #404040; --btn-bg: #3d3d3d; --btn-border: #505050; --btn-hover-bg: #4d4d4d; --text-color: #e0e0e0; --error-bg: #4d3d00; --error-border: #665200; --error-text: #ffd966; --retry-bg: #665200; --retry-hover-bg: #806600; --spinner-border: #404040; --spinner-accent: #4da6ff; --menu-bg: #20242b; --menu-border: #313843; --menu-text: #e5e7eb; --menu-hover: #2d3642; --menu-muted: #9ca3af; }
 }`;
     }
 
