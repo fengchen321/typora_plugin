@@ -37,6 +37,7 @@
         this.observer.observe(editor, {
             childList: true,
             subtree: true,
+            characterData: true,
             attributes: true,
             attributeFilter: ["class", "lang"]
         });
@@ -75,8 +76,12 @@
                 for (var j = 0; j < mutation.addedNodes.length; j++) {
                     this._checkNode(mutation.addedNodes[j]);
                 }
+                this._handlePotentialContentChange(mutation.target);
+            } else if (mutation.type === "characterData") {
+                this._handlePotentialContentChange(mutation.target);
             } else if (mutation.type === "attributes") {
                 this._checkNode(mutation.target);
+                this._handlePotentialContentChange(mutation.target);
             }
         }
     };
@@ -84,19 +89,59 @@
     PlantUMLDetector.prototype._checkNode = function(node) {
         if (!node.querySelectorAll && !node.matches) return;
 
-        var blocks;
-        if (node.querySelectorAll) {
-            blocks = node.querySelectorAll('pre.md-fences[lang="plantuml"]');
+        var blocks = this._collectPlantUMLBlocks(node);
+
+        for (var i = 0; i < blocks.length; i++) {
+            this._registerBlock(blocks[i]);
         }
-        if (!blocks && node.matches && node.matches('pre.md-fences[lang="plantuml"]')) {
-            blocks = [node];
+    };
+
+    PlantUMLDetector.prototype._collectPlantUMLBlocks = function(node) {
+        var selector = 'pre.md-fences[lang="plantuml"]';
+        var blocks = [];
+
+        if (node.matches && node.matches(selector)) {
+            blocks.push(node);
         }
 
-        if (blocks) {
-            for (var i = 0; i < blocks.length; i++) {
-                this._registerBlock(blocks[i]);
+        if (node.querySelectorAll) {
+            var descendants = node.querySelectorAll(selector);
+            for (var i = 0; i < descendants.length; i++) {
+                blocks.push(descendants[i]);
             }
         }
+
+        return blocks;
+    };
+
+    PlantUMLDetector.prototype._handlePotentialContentChange = function(node) {
+        var blockElement = this._findBlockElement(node);
+        if (!blockElement) {
+            return;
+        }
+
+        var blockId = blockElement.getAttribute(this.ns.dataAttr("block-id"));
+        if (!blockId) {
+            return;
+        }
+
+        this.updateBlockContent(blockId);
+    };
+
+    PlantUMLDetector.prototype._findBlockElement = function(node) {
+        var current = node;
+        if (current && current.nodeType !== 1) {
+            current = current.parentElement || current.parentNode;
+        }
+
+        while (current) {
+            if (current.matches && current.matches('pre.md-fences[lang="plantuml"]')) {
+                return current;
+            }
+            current = current.parentElement || current.parentNode;
+        }
+
+        return null;
     };
 
     PlantUMLDetector.prototype._registerBlock = function(element) {

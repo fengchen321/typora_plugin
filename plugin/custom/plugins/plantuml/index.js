@@ -8,6 +8,7 @@ const defaultConfig = require("./config");
 const PlantUMLDetector = require("./detector");
 const PlantUMLRenderer = require("./renderer");
 const PlantUMLUIController = require("./uiController");
+const RenderPolicy = require("./renderPolicy");
 
 class PlantUMLPlugin {
     constructor(config = {}) {
@@ -148,11 +149,19 @@ class PlantUMLPlugin {
         const block = this.detector.getBlock(blockId);
         if (!block) return;
 
+        const normalizedContent = RenderPolicy.normalizeContent(content);
+        if (!RenderPolicy.shouldRender(normalizedContent)) {
+            block.state = "pending";
+            this.ui.removePreview(blockId);
+            console.log(`[PlantUML Plugin] Skip render [${blockId}]: content is empty or incomplete`);
+            return;
+        }
+
         try {
             block.state = "rendering";
             this.ui.showLoading(blockId);
 
-            const imageUrl = await this.renderer.render(content);
+            const imageUrl = await this.renderer.render(normalizedContent);
             this.ui.createPreview(blockId, block.element, imageUrl);
 
             block.state = "rendered";

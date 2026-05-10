@@ -65,6 +65,7 @@
             const Renderer = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/renderer.js'));
             const UIController = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/uiController.js'));
             const Autocomplete = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/autocomplete.js'));
+            const RenderPolicy = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/renderPolicy.js'));
 
             // 创建插件实例
             const detector = new Detector();
@@ -76,7 +77,7 @@
             injectStyles(getStyles());
 
             // 绑定事件
-            bindEvents(detector, renderer, ui, config);
+            bindEvents(detector, renderer, ui, config, RenderPolicy);
 
             // 启动检测器
             if (config.renderMode === 'auto') {
@@ -95,6 +96,7 @@
                 renderer,
                 ui,
                 autocomplete,
+                renderPolicy: RenderPolicy,
                 config,
                 configManager
             };
@@ -204,18 +206,18 @@
 }`;
     }
 
-    function bindEvents(detector, renderer, ui, config) {
+    function bindEvents(detector, renderer, ui, config, renderPolicy) {
         // 新代码块检测
         EventBus.on('plantuml:block-detected', function(data) {
             if (config.renderMode === 'auto') {
-                renderDebounced(detector, renderer, ui, config, data.blockId, data.content);
+                renderDebounced(detector, renderer, ui, config, renderPolicy, data.blockId, data.content);
             }
         });
 
         // 代码块内容更新
         EventBus.on('plantuml:block-updated', function(data) {
             if (config.renderMode === 'auto') {
-                renderDebounced(detector, renderer, ui, config, data.blockId, data.content);
+                renderDebounced(detector, renderer, ui, config, renderPolicy, data.blockId, data.content);
             }
         });
 
@@ -227,7 +229,7 @@
                 const newContent = detector._extractContent(block.element);
                 block.content = newContent;
                 console.log("[PlantUML Plugin] Refresh requested, new content length:", newContent.length);
-                renderBlock(detector, renderer, ui, data.blockId, newContent);
+                renderBlock(detector, renderer, ui, renderPolicy, data.blockId, newContent);
             }
         });
 
@@ -241,11 +243,8 @@
                 block.content = newContent;
                 console.log("[PlantUML Plugin] Exit edit mode, content length:", newContent.length);
 
-                // 先显示 loading（会隐藏代码块）
-                ui.showLoading(data.blockId);
-
-                // 然后重新渲染
-                renderBlock(detector, renderer, ui, data.blockId, newContent);
+                // 内容准备好后再渲染；未完成时保持代码块可编辑，不切到错误预览。
+                renderBlock(detector, renderer, ui, renderPolicy, data.blockId, newContent);
             }
         });
     }
@@ -253,26 +252,34 @@
     // 防抖定时器
     const debounceTimers = new Map();
 
-    function renderDebounced(detector, renderer, ui, config, blockId, content) {
+    function renderDebounced(detector, renderer, ui, config, renderPolicy, blockId, content) {
         if (debounceTimers.has(blockId)) {
             clearTimeout(debounceTimers.get(blockId));
         }
 
         debounceTimers.set(blockId, setTimeout(function() {
-            renderBlock(detector, renderer, ui, blockId, content);
+            renderBlock(detector, renderer, ui, renderPolicy, blockId, content);
             debounceTimers.delete(blockId);
         }, config.debounceDelay));
     }
 
-    async function renderBlock(detector, renderer, ui, blockId, content) {
+    async function renderBlock(detector, renderer, ui, renderPolicy, blockId, content) {
         const block = detector.getBlock(blockId);
         if (!block) return;
+
+        const normalizedContent = renderPolicy.normalizeContent(content);
+        if (!renderPolicy.shouldRender(normalizedContent)) {
+            block.state = 'pending';
+            ui.removePreview(blockId);
+            console.log('[PlantUML Plugin] Skip render [' + blockId + ']: content is empty or incomplete');
+            return;
+        }
 
         try {
             block.state = 'rendering';
             ui.showLoading(blockId);
 
-            const imageUrl = await renderer.render(content);
+            const imageUrl = await renderer.render(normalizedContent);
             ui.createPreview(blockId, block.element, imageUrl);
 
             block.state = 'rendered';
