@@ -13,11 +13,15 @@
     }
 
     PlantUMLRenderer.prototype.encode = function(text) {
-        console.log("[PlantUML Renderer] Encoding text, length:", text.length);
+        var normalizedText = this._normalizeContent(text);
+        console.log("[PlantUML Renderer] Encoding text, length:", normalizedText.length);
 
-        // 使用 Node.js zlib 进行 deflate 压缩
+        // 使用 Node.js zlib 进行 raw deflate 压缩。
+        // PlantUML 服务端期望的是原始 deflate 数据，不包含 zlib header/checksum。
         var zlib;
-        var reqnode = global.reqnode || global.require;
+        var reqnode = global.reqnode
+            || global.require
+            || (typeof require === "function" ? require : null);
         if (reqnode) {
             zlib = reqnode("zlib");
         }
@@ -26,9 +30,9 @@
             throw new Error("Cannot load zlib module. PlantUML encoding requires Node.js zlib.");
         }
 
-        // 1. UTF-8 编码并 Deflate 压缩（使用 deflate 而非 deflateRaw）
-        var buffer = Buffer.from(text, "utf-8");
-        var compressed = zlib.deflateSync(buffer);
+        // 1. UTF-8 编码并 raw deflate 压缩
+        var buffer = Buffer.from(normalizedText, "utf-8");
+        var compressed = zlib.deflateRawSync(buffer);
 
         console.log("[PlantUML Renderer] Compressed bytes:", compressed.length);
 
@@ -39,11 +43,7 @@
         }
         console.log("[PlantUML Renderer] First 10 bytes:", firstBytes.join(", "));
 
-        // 2. PlantUML 的自定义 base64 编码（跳过 deflate header）
-        // deflate header 是前2字节 (如 120, 156)，最后4字节是 checksum
-        // PlantUML 期望的是原始 deflate 数据，不带 header
-        // 但我们可以用 ~1 前缀告诉服务器这是带 header 的 deflate
-
+        // 2. PlantUML 的自定义 base64 编码
         var result = "";
         var len = compressed.length;
 
@@ -68,17 +68,17 @@
     };
 
     PlantUMLRenderer.prototype.render = async function(content) {
-        var self = this;
+        var normalizedContent = this._normalizeContent(content);
 
         // 先检查缓存
-        var cacheKey = this._hashContent(content);
+        var cacheKey = this._hashContent(normalizedContent);
         if (this.cache.has(cacheKey)) {
             return this.cache.get(cacheKey);
         }
 
-        // 编码并构建 URL（使用 ~1 前缀表示 deflate 带 header）
-        var encoded = this.encode(content);
-        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/~1" + encoded;
+        // 编码并构建 URL
+        var encoded = this.encode(normalizedContent);
+        var url = this.config.serverUrl + "/" + this.config.outputFormat + "/" + encoded;
 
         console.log("[PlantUML Renderer] Render URL:", url);
 
@@ -89,6 +89,12 @@
         this._addToCache(cacheKey, url);
 
         return url;
+    };
+
+    PlantUMLRenderer.prototype._normalizeContent = function(content) {
+        return String(content || "")
+            .replace(/\r\n?/g, "\n")
+            .replace(/^\uFEFF/, "");
     };
 
     PlantUMLRenderer.prototype._loadImage = function(url) {

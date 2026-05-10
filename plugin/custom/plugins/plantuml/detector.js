@@ -140,6 +140,13 @@
     PlantUMLDetector.prototype._extractContent = function(element) {
         console.log("[PlantUML Detector] Extracting content from element:", element);
 
+        // 优先从 CodeMirror 实例获取原始文本，避免从渲染后的 DOM 中读到 NBSP 等占位字符。
+        var codeMirrorValue = this._getCodeMirrorValue(element);
+        if (codeMirrorValue != null) {
+            console.log("[PlantUML Detector] Using CodeMirror instance value, length:", codeMirrorValue.length);
+            return codeMirrorValue;
+        }
+
         // Typora 使用 CodeMirror 来渲染代码块
         var cmContent = element.querySelector(".CodeMirror-code");
         console.log("[PlantUML Detector] CodeMirror-code element:", cmContent);
@@ -149,13 +156,11 @@
             console.log("[PlantUML Detector] Found CodeMirror lines:", lines.length);
             var contents = [];
             for (var i = 0; i < lines.length; i++) {
-                var lineText = lines[i].textContent;
-                // 移除零宽度空格和其他不可见字符
-                lineText = lineText.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+                var lineText = this._normalizeLineText(lines[i].textContent);
                 console.log("[PlantUML Detector] Line", i, ":", lineText.substring(0, 50));
                 contents.push(lineText);
             }
-            var result = contents.join("\n");
+            var result = this._normalizeExtractedContent(contents.join("\n"));
             console.log("[PlantUML Detector] Extracted content length:", result.length);
             return result;
         }
@@ -169,17 +174,42 @@
             console.log("[PlantUML Detector] Using <br> split method");
             var tempDiv = document.createElement("div");
             tempDiv.innerHTML = html;
-            var textContent = tempDiv.textContent || tempDiv.innerText || "";
-            textContent = textContent.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+            var textContent = this._normalizeExtractedContent(tempDiv.textContent || tempDiv.innerText || "");
             console.log("[PlantUML Detector] Fallback text content length:", textContent.length);
             return textContent;
         }
 
         // 方法2：直接文本内容
-        var textContent = codeElement.textContent || "";
-        textContent = textContent.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+        var textContent = this._normalizeExtractedContent(codeElement.textContent || "");
         console.log("[PlantUML Detector] Fallback text content length:", textContent.length);
         return textContent;
+    };
+
+    PlantUMLDetector.prototype._getCodeMirrorValue = function(element) {
+        var cmElement = element.querySelector(".CodeMirror");
+        var cm = cmElement && cmElement.CodeMirror;
+        if (!cm || typeof cm.getValue !== "function") {
+            return null;
+        }
+
+        try {
+            return this._normalizeExtractedContent(cm.getValue());
+        } catch (error) {
+            console.warn("[PlantUML Detector] Failed to read CodeMirror value:", error);
+            return null;
+        }
+    };
+
+    PlantUMLDetector.prototype._normalizeLineText = function(text) {
+        return String(text || "")
+            .replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
+            .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ");
+    };
+
+    PlantUMLDetector.prototype._normalizeExtractedContent = function(text) {
+        return this._normalizeLineText(text)
+            .replace(/\r\n?/g, "\n")
+            .replace(/^\n+|\n+$/g, "");
     };
 
     PlantUMLDetector.prototype._generateId = function() {
