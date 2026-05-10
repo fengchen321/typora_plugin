@@ -4,7 +4,7 @@ global.NamespaceManager = {
     cls: function(name) { return "tp_" + name; }
 };
 
-const PlantUMLAutocomplete = require("./autocomplete");
+const PlantUMLAutocomplete = require("../../plugin/custom/plugins/plantuml/autocomplete");
 const autocomplete = new PlantUMLAutocomplete({
     enableFenceAutocomplete: true,
     fenceAutocompleteMinChars: 3

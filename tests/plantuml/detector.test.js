@@ -9,7 +9,7 @@ global.EventBus = {
     on: function() {}
 };
 
-const PlantUMLDetector = require("./detector");
+const PlantUMLDetector = require("../../plugin/custom/plugins/plantuml/detector");
 const detector = new PlantUMLDetector();
 
 const selfMatchingNode = {

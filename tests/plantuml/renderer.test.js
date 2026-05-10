@@ -1,5 +1,5 @@
 const assert = require("assert");
-const PlantUMLRenderer = require("./renderer");
+const PlantUMLRenderer = require("../../plugin/custom/plugins/plantuml/renderer");
 
 const renderer = new PlantUMLRenderer({
     serverUrl: "http://www.plantuml.com/plantuml",

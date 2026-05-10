@@ -95,6 +95,19 @@ Bob -> Alice: Hi!
 
 使用快捷键 `Ctrl+Shift+U` 手动触发渲染（光标需在 PlantUML 代码块内）。
 
+## 测试
+
+测试代码统一放在仓库根目录下的 `tests/plantuml/`，避免部署到 Typora 用户目录时污染 `plugin/`。
+
+可直接使用 Node 逐个运行：
+
+```bash
+node tests/plantuml/renderer.test.js
+node tests/plantuml/autocomplete.test.js
+node tests/plantuml/detector.test.js
+node tests/plantuml/renderPolicy.test.js
+```
+
 ## 配置选项
 
 配置存储在 `localStorage` 中，可通过浏览器控制台修改：

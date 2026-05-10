@@ -1,5 +1,5 @@
 const assert = require("assert");
-const RenderPolicy = require("./renderPolicy");
+const RenderPolicy = require("../../plugin/custom/plugins/plantuml/renderPolicy");
 
 assert.strictEqual(RenderPolicy.shouldRender(""), false);
 assert.strictEqual(RenderPolicy.shouldRender("   \n\t"), false);
