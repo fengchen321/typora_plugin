@@ -1,473 +1,179 @@
 # PlantUML Typora Plugin Design Specification
 
-## Overview
+## Status
 
-A Typora plugin that enables PlantUML syntax support. When users write PlantUML code in code blocks (````plantuml`), the plugin automatically renders them as images.
+This document describes the current implemented design, not the initial proposal.
 
-### Core Features
+The plugin is now built around a shared runtime so that the browser entrypoint and the standalone plugin-class entrypoint both reuse the same rendering pipeline and lifecycle logic.
 
-1. **Code Block Detection**: Find all code blocks marked as `plantuml` language in Typora's preview area
-2. **Render Replacement**: Extract code content, call render module, replace with `<img>` tag pointing to rendered image URL
-3. **Dynamic Monitoring**: Use MutationObserver to monitor content changes, auto re-render when user modifies or adds PlantUML code blocks
-4. **Edit Fallback**: Allow users to click rendered image to switch back to original code block for editing
-5. **Style Isolation**: All injected styles and logic use namespaced prefixes to avoid affecting Typora's native functionality
-6. **Extensibility**: Designed for easy addition of future plugin features
+## Scope
 
----
+The plugin adds PlantUML support to Typora by:
 
-## Architecture
+1. Detecting fenced code blocks with `lang="plantuml"`
+2. Extracting source text from the active CodeMirror instance
+3. Rendering valid PlantUML source through a PlantUML server
+4. Replacing the source block with an image preview
+5. Allowing users to return to source editing and re-render
+6. Cleaning up state when blocks are removed or no longer use the `plantuml` language
 
-### High-Level Architecture
+## Current Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Typora Window (Browser Context)               │
-├─────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │                  PluginLoader (Entry)                        │    │
-│  │  - Plugin registration and lifecycle management              │    │
-│  │  - Unified API for all plugins                               │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                              │                                       │
-│              ┌───────────────┼───────────────┐                      │
-│              ▼               ▼               ▼                      │
-│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐    │
-│  │ PlantUMLPlugin   │ │ Future Plugin X  │ │ Future Plugin Y  │    │
-│  │                  │ │                  │ │                  │    │
-│  │ ┌──────────────┐ │ │                  │ │                  │    │
-│  │ │ Detector     │ │ │                  │ │                  │    │
-│  │ │ (Code Detect)│ │ │                  │ │                  │    │
-│  │ └──────────────┘ │ │                  │ │                  │    │
-│  │ ┌──────────────┐ │ │                  │ │                  │    │
-│  │ │ Renderer     │ │ │                  │ │                  │    │
-│  │ │ (Render Mgmt)│ │ │                  │ │                  │    │
-│  │ └──────────────┘ │ │                  │ │                  │    │
-│  │ ┌──────────────┐ │ │                  │ │                  │    │
-│  │ │ UIController │ │ │                  │ │                  │    │
-│  │ │ (UI Interact)│ │ │                  │ │                  │    │
-│  │ └──────────────┘ │ │                  │ │                  │    │
-│  └──────────────────┘ └──────────────────┘ └──────────────────┘    │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │              Global Utilities (Reusable)                      │  │
-│  │  - NamespaceManager: CSS namespace isolation                  │  │
-│  │  - EventBus: Plugin inter-communication                       │  │
-│  │  - ConfigManager: Config storage (localStorage)               │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-```
+### Entrypoints
 
----
+- `plugin/index.js`
+  Browser-context loader used from `window.html`
+- `plugin/custom/plugins/plantuml/index.js`
+  Standalone plugin-class entry
 
-## File Structure
+Both entrypoints now construct the same module graph and delegate behavior to `plantuml/runtime.js`.
 
-```
-plugin/custom/plugins/
-├── core/                          # Core infrastructure (reusable)
-│   ├── loader.js                  # Plugin loader
-│   ├── namespace.js               # Namespace management
-│   ├── eventBus.js                # Event bus
-│   └── configManager.js           # Base config manager
-│
-├── plantuml/                      # PlantUML plugin
-│   ├── index.js                   # Plugin entry
-│   ├── detector.js                # Code block detector
-│   ├── renderer.js                # Renderer (encoding + request)
-│   ├── uiController.js            # UI interaction controller
-│   ├── config.js                  # Plugin config
-│   └── style.css                  # Plugin styles
-│
-└── index.js                       # Plugin registration entry
-```
+### Core Shared Modules
 
----
+- `custom/plugins/core/namespace.js`
+  Generates `tp_`-prefixed class names and `data-tp_*` attributes
+- `custom/plugins/core/eventBus.js`
+  Handles inter-module events
+- `custom/plugins/core/configManager.js`
+  Reads and caches config from `localStorage`
 
-## Module Specifications
+### PlantUML Modules
 
-### 1. Core Infrastructure
+- `plantuml/detector.js`
+  Tracks block lifecycle:
+  - initial scan
+  - new block registration
+  - content updates from DOM/CodeMirror mutations
+  - block removal
+  - unregister when fence language changes away from `plantuml`
+- `plantuml/renderer.js`
+  Encodes source using `deflateRaw + PlantUML base64`, builds the server URL, preloads images, and caches results
+- `plantuml/renderPolicy.js`
+  Prevents rendering when content is empty or incomplete
+- `plantuml/uiController.js`
+  Manages preview containers, edit mode, loading state, and error state
+- `plantuml/autocomplete.js`
+  Suggests `plantuml` when the user types ` ```pla `
+- `plantuml/runtime.js`
+  Shared runtime for:
+  - event binding
+  - debounce management
+  - hotkey registration
+  - render pipeline
+  - start/stop lifecycle
+  - shared style injection
 
-#### 1.1 core/loader.js - Plugin Loader
+## Runtime Flow
 
-**Responsibility**: Provide unified plugin registration and management mechanism for future extensibility.
+```text
+window.html
+  -> plugin/index.js
+  -> load core modules and plantuml modules
+  -> create runtime
+  -> runtime.start()
 
-**API**:
+detector
+  -> emit plantuml:block-detected
+  -> emit plantuml:block-updated
+  -> emit plantuml:block-removed
 
-```javascript
-// Base plugin class
-class BasePlugin {
-  constructor(id, config) {
-    this.id = id;
-    this.config = config;
-    this.state = 'idle';  // idle | active | error
-  }
-  
-  // Lifecycle methods
-  async init() {}      // Initialize
-  async activate() {}  // Activate
-  async deactivate() {}// Deactivate
-  async destroy() {}   // Destroy
-  
-  // Utility methods
-  getContainer() {}    // Get plugin container
-  emit(event, data) {} // Emit event
-  on(event, handler) {}// Listen to event
-}
-
-// Plugin loader
-const PluginLoader = {
-  plugins: new Map(),
-  
-  register(id, PluginClass, config) {...},
-  async activateAll() {...},
-  get(id) {...}
-};
+runtime
+  -> debounce by block id
+  -> renderPolicy.shouldRender()
+  -> renderer.render()
+  -> uiController.showLoading/createPreview/showError/removePreview()
 ```
 
-#### 1.2 core/namespace.js - Namespace Management
+## Detection Rules
 
-**Responsibility**: Ensure all CSS class names, data attributes, and event names have unique prefixes to avoid conflicts.
+### Block Identification
 
-**API**:
-
-```javascript
-const PREFIX = "tp_";  // Typora Plugin prefix
-
-const NamespaceManager = {
-  cls(name) { return `${PREFIX}${name}`; },
-  dataAttr(name) { return `data-${PREFIX}${name}`; },
-  event(name) { return `${PREFIX}:${name}`; },
-  selector(name) { return `.${PREFIX}${name}`; }
-};
-
-// Usage examples:
-// NamespaceManager.cls("preview") → "tp_preview"
-// NamespaceManager.dataAttr("block-id") → "data-tp_block-id"
-```
-
-#### 1.3 core/eventBus.js - Event Bus
-
-**Responsibility**: Plugin inter-communication, decoupling module dependencies.
-
-**API**:
-
-```javascript
-const EventBus = {
-  listeners: new Map(),
-  on(event, handler) {...},
-  off(event, handler) {...},
-  emit(event, data) {...},
-  once(event, handler) {...}
-};
-
-// Usage:
-// EventBus.on("plantuml:rendered", (data) => {...});
-// EventBus.emit("plantuml:rendered", { blockId, imageUrl });
-```
-
----
-
-### 2. PlantUML Plugin Modules
-
-#### 2.1 plantuml/detector.js - Code Block Detector
-
-**Responsibility**:
-- Monitor DOM changes
-- Identify PlantUML code blocks
-- Manage code block lifecycle
-
-**Key Methods**:
-
-| Method | Description |
-|--------|-------------|
-| `start()` | Start MutationObserver monitoring |
-| `stop()` | Stop monitoring |
-| `registerBlock(element)` | Register new code block |
-| `extractContent(element)` | Extract code content from element |
-| `getBlock(blockId)` | Get block info by ID |
-| `updateBlockContent(blockId, content)` | Update block content |
-
-**DOM Structure Detection**:
-
-```html
-<pre class="md-fences md-end-block ty-contain-cm mode-loaded" 
-     data-lang="plantuml">
-  <code>...</code>
-</pre>
-```
-
-**Events Emitted**:
-- `plantuml:block-detected`: New block found
-- `plantuml:block-updated`: Block content modified
-
-#### 2.2 plantuml/renderer.js - Renderer
-
-**Responsibility**:
-- PlantUML text encoding (deflate + custom base64)
-- Request render server
-- Cache management
-
-**Encoding Algorithm**:
-
-1. UTF-8 text → deflate compression
-2. Compressed result → custom base64 variant (replace `+/` with `-_`)
-
-**Key Methods**:
-
-| Method | Description |
-|--------|-------------|
-| `encode(text)` | Encode PlantUML text for server |
-| `render(content)` | Render and return image URL |
-| `loadImage(url)` | Preload image with error handling |
-| `hashContent(content)` | Generate content hash for caching |
-
-**Server URL Format**:
-```
-{SERVER_URL}/{OUTPUT_FORMAT}/{ENCODED_CONTENT}
-```
-
-#### 2.3 plantuml/uiController.js - UI Controller
-
-**Responsibility**:
-- Manage rendered result display
-- Handle click/double-click events
-- Implement edit fallback functionality
-
-**Key Methods**:
-
-| Method | Description |
-|--------|-------------|
-| `createPreview(blockId, element, imageUrl)` | Create preview container |
-| `createToolbar(blockId)` | Create toolbar (edit, refresh buttons) |
-| `bindEvents(container, blockId, element)` | Bind interaction events |
-| `enterEditMode(blockId)` | Switch to edit mode |
-| `exitEditMode(blockId)` | Exit edit mode and re-render |
-| `showError(blockId, error)` | Display error message |
-
-**Edit Fallback Behavior**:
-1. Double-click image → hide preview, show original code block
-2. Click outside editing area → hide code, show preview
-3. Content changes trigger re-render
-
-#### 2.4 plantuml/config.js - Plugin Config
-
-**Default Configuration**:
-
-```javascript
-const defaultConfig = {
-  serverUrl: "http://www.plantuml.com/plantuml",
-  renderMode: "auto",      // "auto" real-time preview, "manual" manual trigger
-  outputFormat: "svg",     // "svg" or "png"
-  timeout: 10000           // Request timeout (ms)
-};
-```
-
-**Storage**: localStorage with key `plantuml_plugin_config`
-
-#### 2.5 plantuml/index.js - Plugin Entry
-
-**Responsibility**: Integrate all modules, implement plugin lifecycle.
-
-**Lifecycle Flow**:
-
-```
-init() → bindEvents() → injectStyles()
-          ↓
-    activate() → detector.start()
-          ↓
-    Events: block-detected → renderBlock()
-            block-updated → renderBlock()
-            refresh-requested → renderBlock()
-```
-
----
-
-## Core Workflow
-
-### 1. Initialization Phase
-
-```
-PluginLoader.register("plantuml", PlantUMLPlugin, config)
-    ↓
-PluginLoader.activateAll()
-    ↓
-Load config from localStorage
-    ↓
-Initialize Detector, Renderer, UIController
-    ↓
-Bind EventBus listeners
-    ↓
-Inject CSS styles
-    ↓
-Start MutationObserver
-```
-
-### 2. Detection Phase
-
-```
-DOM mutation detected
-    ↓
-Query for pre.md-fences[data-lang="plantuml"]
-    ↓
-Generate unique blockId
-    ↓
-Extract code content
-    ↓
-Emit "plantuml:block-detected" event
-```
-
-### 3. Rendering Phase
-
-```
-Receive block-detected event
-    ↓
-Check cache for existing render
-    ↓
-If not cached:
-    → Encode content (deflate + custom base64)
-    → Build server URL
-    → Fetch image
-    → Cache result
-    ↓
-Create preview container
-    ↓
-Insert after original code block
-    ↓
-Bind interaction events
-    ↓
-Emit "plantuml:rendered" event
-```
-
-### 4. Edit Fallback Flow
-
-```
-User double-clicks preview image
-    ↓
-Hide preview container
-    ↓
-Show original code block
-    ↓
-User edits code
-    ↓
-User clicks outside editing area
-    ↓
-Re-extract code content
-    ↓
-Trigger re-render
-    ↓
-Show updated preview
-```
-
----
-
-## Style Isolation
-
-All CSS classes use `tp_` prefix managed by `NamespaceManager`:
+PlantUML blocks are identified by:
 
 ```css
-/* Preview container */
-.tp_preview-container { ... }
-
-/* Preview image */
-.tp_preview-image { ... }
-
-/* Toolbar */
-.tp_toolbar { ... }
-.tp_toolbar-btn { ... }
-
-/* Error display */
-.tp_error { ... }
-.tp_error-message { ... }
-
-/* Loading state */
-.tp_loading { ... }
-@keyframes tp_spin { ... }
+pre.md-fences[lang="plantuml"]
 ```
 
-**Data Attributes**:
-- `data-tp_block-id`: Unique block identifier
-- `data-tp_state`: Block state (pending, rendering, rendered, error)
+The detector also tracks registered blocks through:
 
----
+```css
+pre.md-fences[data-tp_block-id]
+```
 
-## Error Handling
+### Content Extraction
 
-| Scenario | Handling |
-|----------|----------|
-| Server unreachable | Display error message, don't block editing |
-| PlantUML syntax error | Display server-returned error text |
-| Network timeout | Show timeout message, allow retry |
-| localStorage failure | Use default config |
+The detector prefers `CodeMirror.getValue()` because reading rendered DOM text can introduce artifacts such as NBSPs.
 
----
+Fallback order:
 
-## Caching Strategy
+1. `CodeMirror.getValue()`
+2. `.CodeMirror-line` text extraction
+3. `<br>`-split DOM fallback
+4. raw `textContent`
 
-- **Content-based caching**: Same content = same hash = same cached image
-- **Cache key**: Simple hash of code content
-- **Cache limit**: Last 20 rendered images (configurable)
+## Render Rules
 
----
+### When Rendering Happens
 
-## Extension Points
+The runtime will render when:
 
-### Adding New Plugins
+- the block is registered and contains renderable content
+- the block content changes
+- the user manually refreshes the block
+- the user exits edit mode with complete content
 
-1. Create new directory under `plugin/custom/plugins/`
-2. Extend `BasePlugin` or `BaseCustomPlugin`
-3. Register with `PluginLoader.register(id, Class, config)`
-4. Reuse core utilities (NamespaceManager, EventBus, ConfigManager)
+### When Rendering Is Skipped
 
-### Adding New Features to PlantUML Plugin
+The runtime will skip rendering when:
 
-- Add new config options in `config.js`
-- Extend `renderer.js` for new output formats
-- Add new UI elements in `uiController.js`
-- Subscribe to new events via EventBus
+- the block is empty
+- the content contains `@start...` without a matching `@end...`
+- the content contains `@end...` without a matching `@start...`
 
----
+This avoids invalid requests while the user is still typing.
 
-## Testing Strategy
+## Cleanup Rules
 
-| Test Item | Method |
-|-----------|--------|
-| Encoding algorithm | Unit test, compare with official encoding |
-| Config read/write | Unit test with mocked localStorage |
-| DOM detection | Manual test in Typora |
-| Render flow | Test with simple PlantUML content |
-| Edit fallback | Manual interaction test |
+The detector unregisters blocks when:
 
----
+- the DOM node is removed
+- the `lang` attribute changes away from `plantuml`
 
-## Dependencies
+The runtime reacts to `plantuml:block-removed` by:
 
-- **Node.js built-ins**: `zlib` (for deflate compression)
-- **Browser APIs**: `MutationObserver`, `localStorage`, `fetch`/`Image`
-- **Typora APIs**: Custom plugin mechanism (`BaseCustomPlugin`)
+- cancelling pending debounced renders
+- removing the preview container
+- leaving the original source block visible
 
----
+## Configuration
 
-## Security Considerations
+Current runtime configuration source:
 
-- **No eval**: No dynamic code execution
-- **CORS**: Images loaded from external server
-- **XSS prevention**: Error messages sanitized
-- **Config isolation**: Plugin config doesn't affect Typora settings
+- key: `plantuml_plugin_config`
+- storage: `localStorage`
 
----
+Supported keys:
 
-## Performance Considerations
+- `serverUrl`
+- `renderMode`
+- `outputFormat`
+- `timeout`
+- `cacheLimit`
+- `debounceDelay`
+- `hotkey`
+- `enableFenceAutocomplete`
+- `fenceAutocompleteMinChars`
 
-- **Debounced rendering**: Don't render on every keystroke
-- **Lazy loading**: Only render visible code blocks
-- **Cache hits**: Avoid redundant network requests
-- **Observer optimization**: Only watch relevant DOM attributes
+## Tests
 
----
+Repository tests live under `tests/plantuml/`.
 
-## Future Enhancements
+Coverage currently includes:
 
-1. **Offline support**: Bundle PlantUML jar for local rendering
-2. **Export integration**: Ensure images export correctly to PDF/HTML
-3. **Multiple themes**: Support different PlantUML themes
-4. **Code completion**: PlantUML syntax hints
-5. **Live preview panel**: Side-by-side preview panel
+- renderer encoding stability
+- autocomplete matching behavior
+- detector block registration and cleanup
+- render policy guard behavior
+- shared runtime integration behavior
+
+Each test file includes short scenario comments describing the regression it protects against.

@@ -1,105 +1,165 @@
 # Typora PlantUML 插件
 
-一个为 Typora 提供 PlantUML 语法支持的独立插件。当用户在代码块中编写 PlantUML 代码时，插件会自动将其渲染为图片。
+一个面向 Typora 的独立 PlantUML 插件。它会识别 ` ```plantuml ` 代码块，在编辑区内自动渲染为图片，并提供回退编辑、手动刷新、围栏补全和基础生命周期清理。
 
-## 功能特性
+## 当前能力
 
-- **自动渲染**：识别 ````plantuml` 代码块并自动渲染为图片
-- **实时预览**：支持实时渲染模式（编辑时自动更新）
-- **手动触发**：支持手动触发渲染（快捷键 `Ctrl+Shift+U`）
-- **编辑回退**：双击渲染图片可切换回代码编辑，点击空白处自动重新渲染
-- **样式隔离**：所有 CSS 类名使用 `tp_` 前缀，避免与 Typora 原生样式冲突
-- **缓存优化**：LRU 缓存策略，避免重复请求服务器
-- **深色模式**：支持 Typora 深色模式
-- **完全独立**：不依赖任何外部项目
+- 自动识别 `plantuml` fenced code block 并渲染为图片
+- 对已存在代码块和新建代码块都支持实时检测
+- 编辑中对空块、未闭合 `@start.../@end...` 的内容跳过渲染，避免错误页闪烁
+- 双击预览图回到源码编辑；退出编辑后重新提取内容再渲染
+- `Ctrl+Shift+U` 手动刷新当前 PlantUML 块
+- ` ```pla ` 触发 `plantuml` 围栏补全
+- 当块被删除或语言改走时，自动清理预览、内部状态和待执行定时器
+- 根目录 `tests/plantuml/` 提供 Node 可直接运行的回归测试
 
-## 安装方法
+## 安装
 
-### 前置要求
+### 目录
 
-- Typora 版本 ≥ 0.9.98（最后一个免费版本）
-- Windows、macOS 或 Linux 平台
+当前运行入口默认查找 Typora 的 `plugin` 目录，而不是 `plugins`：
 
-### 步骤一：创建插件目录
-
-根据您的操作系统，创建插件目录：
-
-- **Windows**: `%APPDATA%\Typora\plugins\` 或 `%LOCALAPPDATA%\Typora\plugins\`
-- **macOS**: `~/Library/Application Support/Typora/plugins/`
-- **Linux**: `~/.config/Typora/plugins/`
+- Windows: `Typora安装目录/resources/plugin/`
+- macOS: `Typora.app/Contents/Resources/plugin/`
+- Linux: `Typora安装目录/resources/plugin/`
 
 如果目录不存在，请手动创建。
 
-> 也可以将插件放在 Typora 安装目录下的 `resources/plugins/` 文件夹中。
+### 复制文件
 
-### 步骤二：复制插件文件
+将仓库里的整个 `typora_plugin/plugin` 目录复制到 Typora 的 `resources/` 下，使最终路径类似：
 
-将本项目 `plugin` 目录内的所有内容复制到上述插件目录：
-
-```
-插件目录（如 %APPDATA%\Typora\plugins\）
-├── index.js              (插件加载器入口)
-└── custom/
-    └── plugins/
-        ├── core/         (核心工具模块)
-        │   ├── namespace.js
-        │   ├── eventBus.js
-        │   └── configManager.js
-        └── plantuml/     (PlantUML 插件)
-            ├── detector.js
-            ├── renderer.js
-            ├── uiController.js
-            └── config.js
+```text
+resources/
+├── plugin/
+│   ├── index.js
+│   ├── core/
+│   ├── custom/plugins/core/
+│   ├── custom/plugins/plantuml/
+│   └── global/settings/custom_plugin.user.toml
+└── window.html
 ```
 
-### 步骤三：修改 window.html
+### 注入脚本
 
-根据您的 Typora 版本，找到 `window.html` 文件：
-
-- **正式版 Typora**: `Typora安装目录/resources/window.html`
-- **免费版 Typora**: `Typora安装目录/resources/app/window.html`
-
-在 `window.html` 的 `</body>` 标签前添加一行：
+在 Typora 的 `window.html` 里添加：
 
 ```html
 <script src="./plugin/index.js" defer="defer"></script>
 ```
 
-### 步骤四：重启 Typora
+然后重启 Typora。
 
-重启 Typora 后，插件将自动生效。您可以在控制台（按 Shift + F12）看到加载成功的提示。
+## 使用
 
-## 使用方法
-
-### 基本使用
-
-在 Typora 中创建 PlantUML 代码块：
+### 基本示例
 
 ````markdown
 ```plantuml
 @startuml
-Alice -> Bob: Hello
-Bob -> Alice: Hi!
+Bob -> Alice : hello
 @enduml
 ```
 ````
 
-插件会自动检测并渲染为图片。
+### 编辑和刷新
 
-### 编辑模式
+- 双击预览图：回到源码编辑
+- 点击块外空白：退出编辑并重新渲染
+- `Ctrl+Shift+U`：手动刷新当前 PlantUML 块
 
-- **双击渲染图片**：切换回代码编辑模式
-- **点击空白处**：自动退出编辑模式并重新渲染
+### 围栏补全
 
-### 手动渲染
+- 在一行末尾输入 ` ```pla `
+- 按 `Tab`、`Enter` 或点击候选
+- 会补全为 ` ```plantuml `
 
-使用快捷键 `Ctrl+Shift+U` 手动触发渲染（光标需在 PlantUML 代码块内）。
+默认不会在纯 ` ``` ` 时弹提示。
+
+## 配置
+
+当前独立运行模式使用 `localStorage`，键为 `plantuml_plugin_config`。可以在 Typora 开发者工具控制台中查看或覆盖：
+
+```javascript
+JSON.parse(localStorage.getItem("plantuml_plugin_config"))
+
+localStorage.setItem("plantuml_plugin_config", JSON.stringify({
+  renderMode: "manual",
+  serverUrl: "http://localhost:8080/plantuml"
+}))
+```
+
+默认配置定义在 [plugin/custom/plugins/plantuml/config.js](typora_plugin/plugin/custom/plugins/plantuml/config.js:1)。
+
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `serverUrl` | `http://www.plantuml.com/plantuml` | PlantUML 渲染服务器 |
+| `renderMode` | `auto` | `auto` 自动渲染，`manual` 仅手动触发 |
+| `outputFormat` | `svg` | 输出格式 |
+| `timeout` | `10000` | 图片加载超时毫秒数 |
+| `cacheLimit` | `20` | URL 缓存条目上限 |
+| `debounceDelay` | `500` | 自动渲染防抖延迟 |
+| `hotkey` | `ctrl+shift+u` | 手动刷新快捷键 |
+| `enableFenceAutocomplete` | `true` | 是否启用围栏补全 |
+| `fenceAutocompleteMinChars` | `3` | 触发 `plantuml` 补全所需最少前缀字符数 |
+
+`plugin/global/settings/custom_plugin.user.toml` 目前主要作为样例配置保留，不是独立入口的实际读取源。
+
+## 架构
+
+### 运行入口
+
+- [plugin/index.js](typora_plugin/plugin/index.js:1)
+  负责在 Typora 浏览器上下文里定位 `plugin/` 目录、加载模块、创建运行时。
+- [plugin/custom/plugins/plantuml/index.js](typora_plugin/plugin/custom/plugins/plantuml/index.js:1)
+  保留为“独立插件类”入口，但现在同样复用共享 runtime，不再维护单独的一套事件与渲染逻辑。
+
+### 共享核心
+
+- [plugin/custom/plugins/core/namespace.js](typora_plugin/plugin/custom/plugins/core/namespace.js:1)
+  负责 `tp_` 前缀隔离
+- [plugin/custom/plugins/core/eventBus.js](typora_plugin/plugin/custom/plugins/core/eventBus.js:1)
+  负责模块间事件
+- [plugin/custom/plugins/core/configManager.js](typora_plugin/plugin/custom/plugins/core/configManager.js:1)
+  负责 `localStorage` 配置缓存
+
+### PlantUML 模块
+
+- [detector.js](typora_plugin/plugin/custom/plugins/plantuml/detector.js:1)
+  监听 DOM 变化，注册/更新/注销代码块，并从 CodeMirror 实例中提取源码
+- [renderer.js](typora_plugin/plugin/custom/plugins/plantuml/renderer.js:1)
+  执行 `deflateRaw + PlantUML base64` 编码并加载图片
+- [renderPolicy.js](typora_plugin/plugin/custom/plugins/plantuml/renderPolicy.js:1)
+  决定内容是否值得渲染
+- [uiController.js](typora_plugin/plugin/custom/plugins/plantuml/uiController.js:1)
+  管理预览、编辑态和错误态
+- [autocomplete.js](typora_plugin/plugin/custom/plugins/plantuml/autocomplete.js:1)
+  管理围栏语言补全
+- [runtime.js](typora_plugin/plugin/custom/plugins/plantuml/runtime.js:1)
+  统一事件绑定、防抖渲染、快捷键、样式注入和运行时生命周期
+
+### 工作流
+
+```text
+window.html -> plugin/index.js
+             -> load modules
+             -> create PlantUMLRuntime
+             -> detector.start() / autocomplete.start()
+
+detector
+  -> plantuml:block-detected
+  -> plantuml:block-updated
+  -> plantuml:block-removed
+
+runtime
+  -> renderPolicy.shouldRender()
+  -> renderer.render()
+  -> uiController.createPreview()/showError()/removePreview()
+```
 
 ## 测试
 
-测试代码统一放在仓库根目录下的 `tests/plantuml/`，避免部署到 Typora 用户目录时污染 `plugin/`。
-
-可直接使用 Node 逐个运行：
+测试代码统一放在 [tests/plantuml](typora_plugin/tests/plantuml)。
 
 ```bash
 node tests/plantuml/renderer.test.js
@@ -109,150 +169,16 @@ node tests/plantuml/renderPolicy.test.js
 node tests/plantuml/runtime.test.js
 ```
 
-## 配置选项
-
-配置存储在 `localStorage` 中，可通过浏览器控制台修改：
-
-```javascript
-// 获取当前配置
-JSON.parse(localStorage.getItem('plantuml_plugin_config'))
-
-// 修改配置（示例：切换为手动渲染模式）
-localStorage.setItem('plantuml_plugin_config', JSON.stringify({
-    renderMode: 'manual'
-}))
-```
-
-| 选项 | 默认值 | 说明 |
-|------|--------|------|
-| `serverUrl` | `http://www.plantuml.com/plantuml` | 渲染服务器地址 |
-| `renderMode` | `auto` | 渲染模式：`auto`（实时）或 `manual`（手动） |
-| `outputFormat` | `svg` | 输出格式：`svg` 或 `png` |
-| `timeout` | `10000` | 请求超时时间（毫秒） |
-| `cacheLimit` | `20` | 缓存数量上限 |
-| `debounceDelay` | `500` | 实时渲染防抖延迟（毫秒） |
-| `hotkey` | `ctrl+shift+u` | 手动渲染快捷键 |
-
-## 架构说明
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PlantUML Plugin                          │
-├─────────────────────────────────────────────────────────────┤
-│  plugins/index.js        插件加载器入口                      │
-├─────────────────────────────────────────────────────────────┤
-│  ConfigManager           管理用户配置（localStorage）         │
-│  EventBus                插件模块间通信（事件总线）            │
-│  NamespaceManager        CSS 命名空间隔离                    │
-├─────────────────────────────────────────────────────────────┤
-│  Detector                监听 DOM，检测 PlantUML 代码块       │
-│  Renderer                编码与请求渲染服务器                  │
-│  UIController            管理渲染结果显示与交互                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 核心工作流程
-
-```
-1. 初始化：加载配置 → 初始化模块 → 绑定事件 → 启动 DOM 监听
-
-2. 检测：DOM 变化 → 查找 plantuml 代码块 → 提取内容 → 发送事件
-
-3. 渲染：编码内容 → 请求服务器 → 缓存结果 → 显示图片
-
-4. 编辑：双击图片 → 显示代码 → 编辑内容 → 点击空白 → 重新渲染
-```
-
-## 文件结构
-
-```
-plugins/                        # 插件目录（放在用户数据目录或 Typora resources 下）
-├── index.js                   # 插件加载器（入口）
-│
-└── custom/plugins/
-    ├── core/                  # 核心工具模块（可复用）
-    │   ├── namespace.js       # CSS 命名空间管理
-    │   ├── eventBus.js        # 事件总线
-    │   └── configManager.js   # 配置管理
-    │
-    └── plantuml/              # PlantUML 插件
-        ├── detector.js        # 代码块检测
-        ├── renderer.js        # 渲染引擎
-        ├── uiController.js    # UI 控制
-        └── config.js          # 默认配置
-```
-
-## 扩展开发
-
-核心模块设计为可复用，便于开发其他插件：
-
-1. 在 `plugins/custom/plugins/` 下创建新插件目录
-2. 在插件模块中使用全局变量访问核心工具：
-   ```javascript
-   // UMD 模块会自动从全局变量获取依赖
-   var NamespaceManager = root.NamespaceManager;
-   var EventBus = root.EventBus;
-   ```
-3. 创建插件类并导出（使用 UMD 格式）：
-   ```javascript
-   (function(root) {
-       'use strict';
-       
-       function MyPlugin(config) {
-           this.config = config;
-       }
-       
-       MyPlugin.prototype.init = function() {
-           // 使用 NamespaceManager 和 EventBus
-       };
-       
-       // UMD 导出
-       if (typeof module !== 'undefined' && module.exports) {
-           module.exports = MyPlugin;
-       } else {
-           root.MyPlugin = MyPlugin;
-       }
-   })(typeof global !== 'undefined' ? global : window);
-   ```
-4. 在 `plugins/index.js` 中加载新插件
+每个测试文件内部都带有简短场景说明，用来描述当前断言保护的回归点。
 
 ## 已知限制
 
-- 需要网络连接访问渲染服务器
-- 公共服务器（plantuml.com）可能有访问限制或速率限制
-- 大型图表可能导致 URL 过长问题
+- 依赖外部 PlantUML 服务器时需要网络可达
+- 当前默认服务端是 `plantuml.com`
+- 复杂图的导出、离线服务器引导和更细粒度的配置 UI 还没有做
 
-## 故障排除
+## 相关文档
 
-### 图片不显示
-
-1. 检查网络连接是否正常
-2. 按 F12 打开控制台，查看是否有错误信息
-3. 检查 `serverUrl` 配置是否正确
-
-### 代码块未被识别
-
-1. 确保代码块语言标识为 `plantuml`（不是 `uml` 或其他）
-2. 确保代码块以 `@startuml` 开始，以 `@enduml` 结束
-3. 重启 Typora
-
-### 编辑后不自动渲染
-
-1. 点击编辑区域外的空白处触发重新渲染
-2. 或使用快捷键 `Ctrl+Shift+U` 手动渲染
-
-### 插件未加载
-
-1. 确认 `window.html` 已正确添加脚本引用
-2. 确认插件目录位置正确（用户数据目录或 Typora resources 下的 `plugins` 文件夹）
-3. 检查控制台是否有加载错误
-4. 确认脚本引用路径正确：`./plugin/index.js`（相对于 window.html 的路径）
-
-## 许可证
-
-MIT License
-
-## 参考
-
-- [PlantUML 官方网站](https://plantuml.com/)
-- [typora_plugin 项目](https://github.com/obgnail/typora_plugin) - 参考 Typora 插件架构设计
+- [plugin/custom/plugins/plantuml/README.md](typora_plugin/plugin/custom/plugins/plantuml/README.md)
+- [docs/superpowers/specs/2026-05-09-plantuml-plugin-design.md](typora_plugin/docs/superpowers/specs/2026-05-09-plantuml-plugin-design.md)
+- [docs/superpowers/plans/2026-05-09-plantuml-plugin.md](typora_plugin/docs/superpowers/plans/2026-05-09-plantuml-plugin.md)
