@@ -19,6 +19,14 @@
         this.ns = NamespaceManager;
     }
 
+    PlantUMLDetector.prototype._plantUMLSelector = function() {
+        return 'pre.md-fences[lang="plantuml"]';
+    };
+
+    PlantUMLDetector.prototype._trackedBlockSelector = function() {
+        return 'pre.md-fences[' + this.ns.dataAttr("block-id") + ']';
+    };
+
     PlantUMLDetector.prototype.start = function() {
         var self = this;
         var editor = document.querySelector("#write");
@@ -62,7 +70,7 @@
     PlantUMLDetector.prototype._scanExistingBlocks = function() {
         var self = this;
         // Typora 使用 lang="plantuml" 而不是 data-lang="plantuml"
-        var blocks = document.querySelectorAll('pre.md-fences[lang="plantuml"]');
+        var blocks = document.querySelectorAll(this._plantUMLSelector());
         console.log("[PlantUML Detector] Scanning, found blocks:", blocks.length);
         blocks.forEach(function(block) {
             self._registerBlock(block);
@@ -73,15 +81,20 @@
         for (var i = 0; i < mutations.length; i++) {
             var mutation = mutations[i];
             if (mutation.type === "childList") {
-                for (var j = 0; j < mutation.addedNodes.length; j++) {
-                    this._checkNode(mutation.addedNodes[j]);
+                var addedNodes = mutation.addedNodes || [];
+                var removedNodes = mutation.removedNodes || [];
+
+                for (var j = 0; j < addedNodes.length; j++) {
+                    this._checkNode(addedNodes[j]);
+                }
+                for (var k = 0; k < removedNodes.length; k++) {
+                    this._handleRemovedNode(removedNodes[k]);
                 }
                 this._handlePotentialContentChange(mutation.target);
             } else if (mutation.type === "characterData") {
                 this._handlePotentialContentChange(mutation.target);
             } else if (mutation.type === "attributes") {
-                this._checkNode(mutation.target);
-                this._handlePotentialContentChange(mutation.target);
+                this._handleAttributeMutation(mutation.target);
             }
         }
     };
@@ -97,7 +110,7 @@
     };
 
     PlantUMLDetector.prototype._collectPlantUMLBlocks = function(node) {
-        var selector = 'pre.md-fences[lang="plantuml"]';
+        var selector = this._plantUMLSelector();
         var blocks = [];
 
         if (node.matches && node.matches(selector)) {
@@ -114,8 +127,44 @@
         return blocks;
     };
 
+    PlantUMLDetector.prototype._collectTrackedBlocks = function(node) {
+        var selector = this._trackedBlockSelector();
+        var blocks = [];
+
+        if (node.matches && node.matches(selector)) {
+            blocks.push(node);
+        }
+
+        if (node.querySelectorAll) {
+            var descendants = node.querySelectorAll(selector);
+            for (var i = 0; i < descendants.length; i++) {
+                blocks.push(descendants[i]);
+            }
+        }
+
+        return blocks;
+    };
+
+    PlantUMLDetector.prototype._handleAttributeMutation = function(node) {
+        var trackedBlock = this._findTrackedBlockElement(node);
+        if (trackedBlock && !this._isPlantUMLBlock(trackedBlock)) {
+            this._unregisterBlockByElement(trackedBlock);
+            return;
+        }
+
+        this._checkNode(node);
+        this._handlePotentialContentChange(node);
+    };
+
+    PlantUMLDetector.prototype._handleRemovedNode = function(node) {
+        var blocks = this._collectTrackedBlocks(node);
+        for (var i = 0; i < blocks.length; i++) {
+            this._unregisterBlockByElement(blocks[i]);
+        }
+    };
+
     PlantUMLDetector.prototype._handlePotentialContentChange = function(node) {
-        var blockElement = this._findBlockElement(node);
+        var blockElement = this._findPlantUMLBlockElement(node);
         if (!blockElement) {
             return;
         }
@@ -128,20 +177,50 @@
         this.updateBlockContent(blockId);
     };
 
-    PlantUMLDetector.prototype._findBlockElement = function(node) {
+    PlantUMLDetector.prototype._findClosest = function(node, selector) {
         var current = node;
         if (current && current.nodeType !== 1) {
             current = current.parentElement || current.parentNode;
         }
 
         while (current) {
-            if (current.matches && current.matches('pre.md-fences[lang="plantuml"]')) {
+            if (current.matches && current.matches(selector)) {
                 return current;
             }
             current = current.parentElement || current.parentNode;
         }
 
         return null;
+    };
+
+    PlantUMLDetector.prototype._findPlantUMLBlockElement = function(node) {
+        return this._findClosest(node, this._plantUMLSelector());
+    };
+
+    PlantUMLDetector.prototype._findTrackedBlockElement = function(node) {
+        return this._findClosest(node, this._trackedBlockSelector());
+    };
+
+    PlantUMLDetector.prototype._isPlantUMLBlock = function(node) {
+        return !!(node && node.matches && node.matches(this._plantUMLSelector()));
+    };
+
+    PlantUMLDetector.prototype._unregisterBlockByElement = function(element) {
+        if (!element) {
+            return;
+        }
+
+        var blockId = element.getAttribute(this.ns.dataAttr("block-id"));
+        if (!blockId) {
+            return;
+        }
+
+        this.blocks.delete(blockId);
+        EventBus.emit("plantuml:block-removed", { blockId: blockId });
+
+        if (element.removeAttribute) {
+            element.removeAttribute(this.ns.dataAttr("block-id"));
+        }
     };
 
     PlantUMLDetector.prototype._registerBlock = function(element) {
@@ -280,10 +359,16 @@
     };
 
     PlantUMLDetector.prototype.findCurrentBlock = function() {
-        var activeElement = document.activeElement;
-        if (!activeElement) return null;
+        var selection = typeof window !== "undefined" && window.getSelection ? window.getSelection() : null;
+        var activeElement = typeof document !== "undefined" ? document.activeElement : null;
+        var block = null;
 
-        var block = activeElement.closest('pre.md-fences[data-lang="plantuml"]');
+        if (selection && selection.rangeCount) {
+            block = this._findPlantUMLBlockElement(selection.anchorNode || selection.focusNode);
+        }
+        if (!block && activeElement) {
+            block = this._findPlantUMLBlockElement(activeElement);
+        }
         if (!block) return null;
 
         var blockId = block.getAttribute(this.ns.dataAttr("block-id"));

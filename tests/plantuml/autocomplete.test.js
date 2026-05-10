@@ -10,6 +10,7 @@ const autocomplete = new PlantUMLAutocomplete({
     fenceAutocompleteMinChars: 3
 });
 
+// Scenario: typing a clear `pla` prefix at fence language position should suggest plantuml.
 assert.deepStrictEqual(
     autocomplete._matchFenceLine("```pla"),
     {
@@ -19,6 +20,7 @@ assert.deepStrictEqual(
     }
 );
 
+// Scenario: indented fenced blocks should preserve indentation when autocompleting.
 assert.deepStrictEqual(
     autocomplete._matchFenceLine("    ```plan"),
     {
@@ -28,6 +30,7 @@ assert.deepStrictEqual(
     }
 );
 
+// Scenario: suggestions should stay hidden for empty or ambiguous prefixes.
 assert.strictEqual(autocomplete._matchFenceLine("```"), null);
 assert.strictEqual(autocomplete._matchFenceLine("```p"), null);
 assert.strictEqual(autocomplete._matchFenceLine("```pl"), null);

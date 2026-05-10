@@ -66,29 +66,26 @@
             const UIController = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/uiController.js'));
             const Autocomplete = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/autocomplete.js'));
             const RenderPolicy = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/renderPolicy.js'));
+            const Runtime = loadModule(path.join(pluginDir, 'custom/plugins/plantuml/runtime.js'));
 
             // 创建插件实例
             const detector = new Detector();
             const renderer = new Renderer(config);
             const ui = new UIController();
             const autocomplete = new Autocomplete(config);
+            const runtime = new Runtime({
+                config: config,
+                detector: detector,
+                renderer: renderer,
+                ui: ui,
+                autocomplete: autocomplete,
+                renderPolicy: RenderPolicy,
+                eventBus: EventBus
+            });
 
             // 注入样式
-            injectStyles(getStyles());
-
-            // 绑定事件
-            bindEvents(detector, renderer, ui, config, RenderPolicy);
-
-            // 启动检测器
-            if (config.renderMode === 'auto') {
-                detector.start();
-            }
-
-            // 启动 fenced code 自动补全
-            autocomplete.start();
-
-            // 注册快捷键
-            registerHotkey(detector, renderer, config);
+            runtime.injectStyles(document);
+            runtime.start();
 
             // 保存引用供调试
             global.__plantuml_plugin__ = {
@@ -96,6 +93,7 @@
                 renderer,
                 ui,
                 autocomplete,
+                runtime,
                 renderPolicy: RenderPolicy,
                 config,
                 configManager
@@ -170,153 +168,6 @@
             console.error(`[PlantUML Plugin] Failed to load module: ${modulePath}`, e);
             throw e;
         }
-    }
-
-    function injectStyles(css) {
-        const style = document.createElement('style');
-        style.id = 'plantuml-plugin-styles';
-        style.textContent = css;
-        document.head.appendChild(style);
-    }
-
-    function getStyles() {
-        return `
-/* Preview container */
-.tp_preview-container { margin: 16px 0; padding: 12px; background: var(--bg-color, #f8f9fa); border-radius: 8px; border: 1px solid var(--border-color, #e9ecef); position: relative; }
-.tp_preview-image { max-width: 100%; height: auto; display: block; margin: 0 auto; cursor: pointer; }
-.tp_toolbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s ease; }
-.tp_preview-container:hover .tp_toolbar { opacity: 1; }
-.tp_toolbar-btn { padding: 4px 12px; background: var(--btn-bg, white); border: 1px solid var(--btn-border, #dee2e6); border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit; color: var(--text-color, #333); }
-.tp_toolbar-btn:hover { background: var(--btn-hover-bg, #f1f3f4); }
-.tp_error { padding: 16px; background: var(--error-bg, #fff3cd); border: 1px solid var(--error-border, #ffc107); border-radius: 4px; color: var(--error-text, #856404); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.tp_error-icon { font-size: 18px; }
-.tp_error-message { flex: 1; min-width: 100px; font-family: monospace; word-break: break-word; }
-.tp_retry-btn { padding: 4px 12px; background: var(--retry-bg, #ffc107); border: none; border-radius: 4px; cursor: pointer; font-family: inherit; }
-.tp_retry-btn:hover { background: var(--retry-hover-bg, #e0a800); }
-.tp_loading { display: flex; align-items: center; justify-content: center; padding: 32px; min-height: 100px; }
-.tp_loading::after { content: ""; width: 32px; height: 32px; border: 3px solid var(--spinner-border, #e9ecef); border-top-color: var(--spinner-accent, #007bff); border-radius: 50%; animation: tp_spin 1s linear infinite; }
-.tp_autocomplete-popup { position: absolute; z-index: 9999; min-width: 180px; padding: 6px; background: var(--menu-bg, #ffffff); border: 1px solid var(--menu-border, #d0d7de); border-radius: 10px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18); }
-.tp_autocomplete-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 10px; background: transparent; border: none; border-radius: 8px; cursor: pointer; text-align: left; font: inherit; color: var(--menu-text, #1f2328); }
-.tp_autocomplete-item:hover { background: var(--menu-hover, #f3f4f6); }
-.tp_autocomplete-text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.tp_autocomplete-hint { font-size: 12px; color: var(--menu-muted, #6b7280); }
-@keyframes tp_spin { to { transform: rotate(360deg); } }
-@media (prefers-color-scheme: dark) {
-    .tp_preview-container { --bg-color: #2d2d2d; --border-color: #404040; --btn-bg: #3d3d3d; --btn-border: #505050; --btn-hover-bg: #4d4d4d; --text-color: #e0e0e0; --error-bg: #4d3d00; --error-border: #665200; --error-text: #ffd966; --retry-bg: #665200; --retry-hover-bg: #806600; --spinner-border: #404040; --spinner-accent: #4da6ff; --menu-bg: #20242b; --menu-border: #313843; --menu-text: #e5e7eb; --menu-hover: #2d3642; --menu-muted: #9ca3af; }
-}`;
-    }
-
-    function bindEvents(detector, renderer, ui, config, renderPolicy) {
-        // 新代码块检测
-        EventBus.on('plantuml:block-detected', function(data) {
-            if (config.renderMode === 'auto') {
-                renderDebounced(detector, renderer, ui, config, renderPolicy, data.blockId, data.content);
-            }
-        });
-
-        // 代码块内容更新
-        EventBus.on('plantuml:block-updated', function(data) {
-            if (config.renderMode === 'auto') {
-                renderDebounced(detector, renderer, ui, config, renderPolicy, data.blockId, data.content);
-            }
-        });
-
-        // 手动刷新
-        EventBus.on('plantuml:refresh-requested', function(data) {
-            const block = detector.getBlock(data.blockId);
-            if (block) {
-                // 重新从 DOM 提取最新内容
-                const newContent = detector._extractContent(block.element);
-                block.content = newContent;
-                console.log("[PlantUML Plugin] Refresh requested, new content length:", newContent.length);
-                renderBlock(detector, renderer, ui, renderPolicy, data.blockId, newContent);
-            }
-        });
-
-        // 退出编辑模式
-        EventBus.on('plantuml:exit-edit', function(data) {
-            console.log("[PlantUML Plugin] Exit edit event received for:", data.blockId);
-            const block = detector.getBlock(data.blockId);
-            if (block) {
-                // 重新从 DOM 提取最新内容
-                const newContent = detector._extractContent(block.element);
-                block.content = newContent;
-                console.log("[PlantUML Plugin] Exit edit mode, content length:", newContent.length);
-
-                // 内容准备好后再渲染；未完成时保持代码块可编辑，不切到错误预览。
-                renderBlock(detector, renderer, ui, renderPolicy, data.blockId, newContent);
-            }
-        });
-    }
-
-    // 防抖定时器
-    const debounceTimers = new Map();
-
-    function renderDebounced(detector, renderer, ui, config, renderPolicy, blockId, content) {
-        if (debounceTimers.has(blockId)) {
-            clearTimeout(debounceTimers.get(blockId));
-        }
-
-        debounceTimers.set(blockId, setTimeout(function() {
-            renderBlock(detector, renderer, ui, renderPolicy, blockId, content);
-            debounceTimers.delete(blockId);
-        }, config.debounceDelay));
-    }
-
-    async function renderBlock(detector, renderer, ui, renderPolicy, blockId, content) {
-        const block = detector.getBlock(blockId);
-        if (!block) return;
-
-        const normalizedContent = renderPolicy.normalizeContent(content);
-        if (!renderPolicy.shouldRender(normalizedContent)) {
-            block.state = 'pending';
-            ui.removePreview(blockId);
-            console.log('[PlantUML Plugin] Skip render [' + blockId + ']: content is empty or incomplete');
-            return;
-        }
-
-        try {
-            block.state = 'rendering';
-            ui.showLoading(blockId);
-
-            const imageUrl = await renderer.render(normalizedContent);
-            ui.createPreview(blockId, block.element, imageUrl);
-
-            block.state = 'rendered';
-        } catch (error) {
-            block.state = 'error';
-            ui.showError(blockId, error);
-            console.error('[PlantUML Plugin] Render error [' + blockId + ']:', error);
-        }
-    }
-
-    function registerHotkey(detector, config) {
-        document.addEventListener('keydown', function(e) {
-            if (!config.hotkey) return;
-
-            const hotkey = config.hotkey.toLowerCase();
-            const keys = hotkey.split('+');
-
-            const ctrl = keys.includes('ctrl') || keys.includes('control');
-            const alt = keys.includes('alt');
-            const shift = keys.includes('shift');
-            const key = keys[keys.length - 1];
-
-            if (e.ctrlKey === ctrl &&
-                e.altKey === alt &&
-                e.shiftKey === shift &&
-                e.key.toLowerCase() === key) {
-
-                e.preventDefault();
-
-                const block = detector.findCurrentBlock();
-                if (block) {
-                    EventBus.emit('plantuml:refresh-requested', { blockId: block.id });
-                }
-            }
-        });
-
-        console.log('[PlantUML Plugin] Hotkey registered: ' + config.hotkey);
     }
 
 })();

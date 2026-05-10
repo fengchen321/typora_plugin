@@ -106,6 +106,7 @@ node tests/plantuml/renderer.test.js
 node tests/plantuml/autocomplete.test.js
 node tests/plantuml/detector.test.js
 node tests/plantuml/renderPolicy.test.js
+node tests/plantuml/runtime.test.js
 ```
 
 ## 配置选项
